@@ -3,7 +3,6 @@
 from __future__ import print_function
 import os
 import time
-import ftplib
 import socket
 from collections import OrderedDict
 
@@ -95,7 +94,7 @@ class NewportXPS:
             for pos in this['positioners']:
                 stagename = '%s.%s' % (groupname, pos)
                 stage = self.stages[stagename]
-                out.append("   %s (%s)"  % (stagename, stage['type']))
+                out.append("   %s (%s)"  % (stagename, stage['stagetype']))
                 out.append("      Hardware Status: %s"  % (hstat[stagename]))
                 out.append("      Positioner Errors: %s"  % (perrs[stagename]))
         return "\n".join(out)
@@ -160,55 +159,44 @@ class NewportXPS:
         lines = self.ftpconn.getlines('system.ini')
         self.ftpconn.close()
 
-        self.sysconf = '\n'.join(lines)
-        sconf = ConfigParser()
-        sconf.readfp(StringIO(self.sysconf))
-
-        self.stages= OrderedDict()
-        for sect in sconf.sections():
-            if 'plugnumber' in sconf.options(sect):
-                self.stages[sect] = {'type': sconf.get(sect, 'stagename')}
-
-        self.groups = groups = OrderedDict()
-        mode, this = None, None
         pvtgroups = []
-        for line in lines:
-            line = line.replace('\n', '').replace('\r', '').strip()
-            if line.startswith('#') or line.startswith(';'):
+        self.stages= OrderedDict()
+        self.groups = OrderedDict()
+        sconf = ConfigParser()
+        sconf.readfp(StringIO('\n'.join(lines)))
+
+        # read and populate lists of groups first
+        for gtype, glist in sconf['GROUPS'].items():
+            if len(glist) > 0:
+                for gname in glist.split(','):
+                    gname = gname.strip()
+                    self.groups[gname] = OrderedDict()
+                    self.groups[gname]['category'] = gtype.strip()
+                    self.groups[gname]['positioners'] = []
+                    if gtype.startswith('Multiple'):
+                        pvtgroups.append(gname)
+
+        for section, data in sconf.items():
+            if section in ('DEFAULT', 'GENERAL', 'GROUPS'):
                 continue
-            if line.startswith('[GROUPS]'):
-                mode = 'GROUPS'
-            elif line.startswith('[GENERAL]'):
-                mode = 'GENERAL'
-            elif line.startswith('['):
-                mode = None
-                words = line[1:].split(']')
-                this = words[0]
-                if '.' in this:
-                    g, p = this.split('.')
-                    groups[g]['positioners'].append(p)
-            elif mode == 'GROUPS' and len(line) > 3:
-                cat, words = line.split('=', 1)
-                pos = [a.strip() for a in words.split(',')]
-                for p in pos:
-                    if len(p)> 0:
-                        groups[p] = {}
-                        groups[p]['category'] = cat.strip()
-                        groups[p]['positioners'] = []
-                        if cat.startswith('Multiple'):
-                            pvtgroups.append(p)
+            elif section in self.groups:  # this is a Group Section!
+                posnames = [a.strip() for a in data['positionerinuse'].split(',')]
+                self.groups[section]['positioners'] = posnames
+            elif 'plugnumber' in data: # this is a stage
+                self.stages[section] = {'stagetype': data['stagename']}
 
         if len(pvtgroups) == 1:
             self.set_trajectory_group(pvtgroups[0])
 
-        for sname, data in self.stages.items():
+        for sname in self.stages:
             ret = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid, sname)
-            data['max_velo']  = ret[1]
-            data['max_accel'] = ret[2]
+            self.stages[sname]['max_velo']  = ret[1]
+            self.stages[sname]['max_accel'] = ret[2]
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
-            data['low_limit']  = ret[1]
-            data['high_limit'] = ret[2]
-        return groups
+            self.stages[sname]['low_limit']  = ret[1]
+            self.stages[sname]['high_limit'] = ret[2]
+
+        return self.groups
 
 
     def upload_trajectory(self, filename,  text):
@@ -466,7 +454,6 @@ class NewportXPS:
         kwargs = {}
         for k, v in kws.items():
             kwargs[k.lower()] = v
-        print(" -- kwargs ", kwargs)
 
         vals = []
         for i, p in enumerate(posnames):
@@ -474,9 +461,7 @@ class NewportXPS:
                 vals.append(kwargs[p])
             else:
                 vals.append(ret[i+1])
-        print(" move group ", vals)
         self._xps.GroupMoveAbsolute(self._sid, group, vals)
-
 
     @withConnectedXPS
     def move_stage(self, stage, value, relative=False):
