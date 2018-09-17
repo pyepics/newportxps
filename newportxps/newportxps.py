@@ -205,6 +205,9 @@ class NewportXPS:
             ret = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid, sname)
             data['max_velo']  = ret[1]
             data['max_accel'] = ret[2]
+            ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
+            data['low_limit']  = ret[1]
+            data['high_limit'] = ret[2]
         return groups
 
 
