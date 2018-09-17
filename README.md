@@ -1,22 +1,22 @@
 # newportxps
 
-This module provides support code for using Newport XPS motor controllers from Python.
+This module provides code for using Newport XPS motor controllers from Python.
 
 While Newport Corp. has provided a basic socket and ftp interface to the XPS
-controller for a long time, this interface is very low-level and feels a lot
-like using Tcl and/or C.  In addition, there are some incompatibilities
-between the different generations of XPS controllers (generations C, Q, D in
-that chronological order), and a lack of support for Python 3 in the
-Newport-provided interface.
+controller for a long time, this interface is very low-level. In addition,
+there are some incompatibilities between the different generations of XPS
+controllers (generations C, Q, D in that chronological order), and a lack of
+support for Python 3 in the Newport-provided interface.  The `newportxps`
+module here aims to provide a simple, user-friendly interface for the Newport
+XPS that works uniformly for all three generations of XPS and for both Python
+2 and 3.
 
-The newportxps module here attempts to provide a simpler and more
-user-friendly interface o the Newport XPS, and one that works uniformly for
-Python2 and 3, and for all three generations of XPS.  As an example,
-connecting and reading the XPS status will look like this:
+As an example, connecting to and reading the status of an XPS controller may
+look like this:
 
 ```python
  >>> from newportxps import NewportXPS
- >>> xps = NewpportXPS('164.54.160.000', user='Administrator', password='Please.Let.Me.In')
+ >>> xps = NewportXPS('164.54.160.000', user='Administrator', password='Please.Let.Me.In')
  >>> print(xps.status_report)
  # XPS host:         164.54.160.000 (164.54.160.000)
  # Firmware:         XPS-D-N13006
@@ -24,30 +24,50 @@ connecting and reading the XPS status will look like this:
  # Last Reboot:      Wed Sep 12 14:46:44 2018
  # Trajectory Group: None
  # Groups and Stages
- VortexZ (SingleAxisInUse), Status: Ready state from motion
-    VortexZ.Pos (ILS@ILS150CC@XPS-DRV11)
+ DetectorZ (SingleAxisInUse), Status: Ready state from motion
+    DetectorZ.Pos (ILS@ILS150CC@XPS-DRV11)
        Hardware Status: First driver powered on - ZM low level
        Positioner Errors: OK
- EigerX (SingleAxisInUse), Status: Ready state from motion
-    EigerX.Pos (UTS@UTS150PP@XPS-DRV11)
+ SampleX (SingleAxisInUse), Status: Ready state from motion
+    SampleX.Pos (UTS@UTS150PP@XPS-DRV11)
        Hardware Status: First driver powered on - ZM high level
        Positioner Errors: OK
- EigerY (SingleAxisInUse), Status: Ready state from motion
-    EigerY.Pos (UTS@UTS150PP@XPS-DRV11)
+ SampleY (SingleAxisInUse), Status: Ready state from motion
+    SampleY.Pos (UTS@UTS150PP@XPS-DRV11)
        Hardware Status: First driver powered on - ZM high level
        Positioner Errors: OK
- EigerZ (SingleAxisInUse), Status: Ready state from motion
-   EigerZ.Pos (UTS@UTS150PP@XPS-DRV11)
+ SampleZ (SingleAxisInUse), Status: Ready state from motion
+   SampleZ.Pos (UTS@UTS150PP@XPS-DRV11)
        Hardware Status: First driver powered on - ZM low level
        Positioner Errors: OK
+
+ >>> for sname, info in xps.stages.items():
+ ...     print(sname, xps.get_stage_position(sname), info)
+ ...
+ DetectorX.Pos 36.5 {'type': 'ILS@ILS150CC@XPS-DRV11', 'max_velo': 100, 'max_accel': 400, 'low_limit': -74, 'high_limit': 74}
+ SampleX.Pos 1.05 {'type': 'UTS@UTS150PP@XPS-DRV11', 'max_velo': 20, 'max_accel': 80, 'low_limit': -74, 'high_limit': 74}
+ SampleY.Pos 0.24 {'type': 'UTS@UTS150PP@XPS-DRV11', 'max_velo': 20, 'max_accel': 80, 'low_limit': -74, 'high_limit': 74}
+ SampleZ.Pos 2.5 {'type': 'UTS@UTS150PP@XPS-DRV11', 'max_velo': 20, 'max_accel': 80, 'low_limit': -74, 'high_limit': 74}
+
+ >>> xps.move_stage('SampleZ', 1.0)
 
 ```
 
-the `NewportXPS` class has a number of methods to interact with the controller, including
+That is, on initialization, the Groups are read and Stages defined, and can be queried or moved.
+
+
+The `NewportXPS` class has a number of methods to interact with the controller including:
 
    * reboot controller
    * get status, hardware errors, etc.
-   * save and upload new system.ini and stages.ini files
-   * initialize and home stages and Groups of stages
+   * save and upload new `system.ini` and `stages.ini` files.
+   * enable and disable Groups.
+   * initialize and home Stages and Groups of Stages.
    * read Stage positions.
    * move Stages and Groups to new positions.
+   * set Stage velocity.
+   * define simple linear trajectories (using PVT mode), both 'forward' and 'backward'.
+   * upload any PVT trajectory.
+   * arm PVT trajectory.
+   * run PVT trajectory.
+   * read and save Gathering file for a trajectory.
