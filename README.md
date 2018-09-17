@@ -41,6 +41,14 @@ look like this:
        Hardware Status: First driver powered on - ZM low level
        Positioner Errors: OK
 
+ >>> for gname, info in xps.groups.items():
+ ...     print(gname, info)
+ ...
+ DetectorX {'category': 'SingleAxisInUse', 'positioners': ['Pos']}
+ SampleX {'category': 'SingleAxisInUse', 'positioners': ['Pos']}
+ SampleY {'category': 'SingleAxisInUse', 'positioners': ['Pos']}
+ SampleZ {'category': 'SingleAxisInUse', 'positioners': ['Pos']}
+ >>>
  >>> for sname, info in xps.stages.items():
  ...     print(sname, xps.get_stage_position(sname), info)
  ...
@@ -49,11 +57,16 @@ look like this:
  SampleY.Pos 0.24 {'type': 'UTS@UTS150PP@XPS-DRV11', 'max_velo': 20, 'max_accel': 80, 'low_limit': -74, 'high_limit': 74}
  SampleZ.Pos 2.5 {'type': 'UTS@UTS150PP@XPS-DRV11', 'max_velo': 20, 'max_accel': 80, 'low_limit': -74, 'high_limit': 74}
 
- >>> xps.move_stage('SampleZ', 1.0)
+ >>> xps.move_stage('SampleZ.Pos', 1.0)
+
+ >>> xps.home_group('DetectorX')
+
 
 ```
 
-That is, on initialization, the Groups are read and Stages defined, and can be queried or moved.
+On creation and initialization of the NewportXPS, the Groups and status of the
+controller are read in and Stages defined so that they can be queried or
+moved.
 
 
 The `NewportXPS` class has a number of methods to interact with the controller including:
