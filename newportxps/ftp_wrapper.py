@@ -24,7 +24,8 @@ class FTPBaseWrapper(object):
         self._conn = None
 
     def close(self):
-        self._conn.close()
+        if self._conn is not None:
+            self._conn.close()
         self._conn = None
 
     def cwd(self, remotedir):
@@ -79,7 +80,6 @@ class SFTPWrapper(FTPBaseWrapper):
         tmp.seek(0)
         text = bytes2str(tmp.read())
         return text.split('\n')
-
 
     def put(self, text, remotefile):
         txtfile = bytesio(text)
