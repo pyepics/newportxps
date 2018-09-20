@@ -166,7 +166,7 @@ class NewportXPS:
         sconf.readfp(StringIO('\n'.join(lines)))
 
         # read and populate lists of groups first
-        for gtype, glist in sconf['GROUPS'].items():
+        for gtype, glist in sconf.items('GROUPS'): # ].items():
             if len(glist) > 0:
                 for gname in glist.split(','):
                     gname = gname.strip()
@@ -176,14 +176,16 @@ class NewportXPS:
                     if gtype.startswith('Multiple'):
                         pvtgroups.append(gname)
 
-        for section, data in sconf.items():
+        for section in sconf.sections():
             if section in ('DEFAULT', 'GENERAL', 'GROUPS'):
                 continue
-            elif section in self.groups:  # this is a Group Section!
-                posnames = [a.strip() for a in data['positionerinuse'].split(',')]
+            items = sconf.options(section)
+            if section in self.groups:  # this is a Group Section!
+                poslist = sconf.get(section, 'positionerinuse')
+                posnames = [a.strip() for a in poslist.split(',')]
                 self.groups[section]['positioners'] = posnames
-            elif 'plugnumber' in data: # this is a stage
-                self.stages[section] = {'stagetype': data['stagename']}
+            elif 'plugnumber' in items: # this is a stage
+                self.stages[section] = {'stagetype': sconf.get(section, 'stagename')}
 
         if len(pvtgroups) == 1:
             self.set_trajectory_group(pvtgroups[0])
