@@ -82,7 +82,7 @@ class SFTPWrapper(FTPBaseWrapper):
         return text.split('\n')
 
     def put(self, text, remotefile):
-        txtfile = bytesio(text)
+        txtfile = bytesio(six.b(text))
         self._conn.putfo(txtfile, remotefile)
 
 
