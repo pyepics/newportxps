@@ -214,6 +214,18 @@ class NewportXPS:
         self.ftpconn.put(text, filename)
         self.ftpconn.close()
 
+    def upload_systemini(self, text):
+        """upload text of system.ini
+
+        Arguments:
+        ----------
+           text  (str):   full text of system.ini
+        """
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.put(text, 'system.ini')
+        self.ftpconn.close()
+
     @withConnectedXPS
     def set_trajectory_group(self, group, reenable=False):
         """set group name for upcoming trajectories"""
