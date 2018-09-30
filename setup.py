@@ -8,5 +8,5 @@ setup(name = 'newportxps',
       author_email = 'newville@cars.uchicago.edu',
       license = 'BSD',
       description = 'Python interface to Newport XPS controllers',
-      package_dir = {'newportxps': 'newportxps'},
+      packages = ['newportxps'],
       )
