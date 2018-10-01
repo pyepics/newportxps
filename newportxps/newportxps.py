@@ -8,6 +8,10 @@ from collections import OrderedDict
 
 from six.moves import StringIO
 from six.moves.configparser import  ConfigParser
+import numpy as np
+
+import logging
+logger = logging.getLevelName(__name__)
 
 from .XPS_C8_drivers import XPS, XPSException
 
@@ -16,7 +20,6 @@ from .ftp_wrapper import SFTPWrapper, FTPWrapper
 
 IDLE, ARMING, ARMED, RUNNING, COMPLETE, WRITING, READING = \
       'IDLE', 'ARMING', 'ARMED', 'RUNNING', 'COMPLETE', 'WRITING', 'READING'
-
 
 def withConnectedXPS(fcn):
     """decorator to ensure a NewportXPS is connected before a method is called"""
@@ -173,7 +176,7 @@ class NewportXPS:
                     self.groups[gname] = OrderedDict()
                     self.groups[gname]['category'] = gtype.strip()
                     self.groups[gname]['positioners'] = []
-                    if gtype.startswith('Multiple'):
+                    if gtype.lower().startswith('multiple'):
                         pvtgroups.append(gname)
 
         for section in sconf.sections():
@@ -231,13 +234,13 @@ class NewportXPS:
         """set group name for upcoming trajectories"""
         valid = False
         if group in self.groups:
-            if self.groups[group]['category'].startswith('Multiple'):
+            if self.groups[group]['category'].lower().startswith('multiple'):
                 valid = True
 
         if not valid:
             pvtgroups = []
             for gname, group in self.groups.items():
-                if group['category'].startswith('Multiple'):
+                if group['category'].lower().startswith('multiple'):
                     pvtgroups.append(gname)
             pvtgroups = ', '.join(pvtgroups)
             msg = "'%s' cannot be a trajectory group, must be one of %s"
@@ -821,6 +824,160 @@ class NewportXPS:
             print('Wrote %i lines, %i bytes to %s' % (nlines, len(buff), fname))
         if set_idle_when_done:
             self.traj_state = IDLE
+
+    def define_line_trajectories_general(self, name='default',
+                                         start_values=None,
+                                         stop_values=None,
+                                         accel_values=None,
+                                         pulse_time=0.1, scan_time=10.0):
+        """
+        Clemens' code for line trajectories -- should probably be
+        converted to use define_line_trajectories(), 
+        """ 
+        if start_values is None:
+            start_values = np.zeros(len(self.traj_positioners))
+        else:
+            start_values = np.array(start_values)
+
+        if stop_values is None:
+            stop_values = [np.zeros(len(self.traj_positioners))]
+        else:
+            stop_values = np.array(stop_values)
+
+        if accel_values is None:
+            accel_values = []
+            for positioner in self.traj_positioners:
+                response = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid,
+                                                                                self.traj_group + '.' + positioner)
+                accel_values.append(response[2] / 3.0)
+        accel_values = np.array(accel_values)
+
+        distances = []
+        velocities = []
+        temp_start_values = start_values
+        for ind, values in enumerate(stop_values):
+            distances.append((values - temp_start_values) * 1.0)
+            velocities.append(distances[-1] / scan_time * len(stop_values))
+            temp_start_values = values
+
+        ramp_time = np.max(abs(velocities[0] / accel_values))
+        scan_time = float(abs(scan_time)) / len(stop_values)
+        ramp = 0.5 * velocities[0] * ramp_time
+
+        ramp_attr = {'ramptime': ramp_time}
+        down_attr = {'ramptime': ramp_time}
+
+        for ind, positioner in enumerate(self.traj_positioners):
+            ramp_attr[positioner + 'ramp'] = ramp[ind]
+            ramp_attr[positioner + 'velo'] = velocities[0][ind]
+
+            down_attr[positioner + 'ramp'] = ramp[ind]
+            down_attr[positioner + 'zero'] = 0
+
+        ramp_template = "%(ramptime)f"
+        move_template = "%(scantime)f"
+        down_template = "%(ramptime)f"
+        
+        for positioner in self.traj_positioners:
+            ramp_template += ", %({0}ramp)f, %({0}velo)f".format(positioner)
+            move_template += ", %({0}dist)f, %({0}velo)f".format(positioner)
+            down_template += ", %({0}ramp)f, %({0}zero)f".format(positioner)
+        
+        ramp_str = ramp_template % ramp_attr
+        down_str = down_template % down_attr
+        move_strings = []
+
+        for ind in range(len(distances)):
+            attr = {'scantime': scan_time}
+            for pos_ind, positioner in enumerate(self.traj_positioners):
+                attr[positioner + 'dist'] = distances[ind][pos_ind]
+                attr[positioner + 'velo'] = velocities[ind][pos_ind]
+            move_strings.append(move_template % attr)
+
+        #construct trajectory:
+        trajectory_str = ramp_str + '\n'
+        for move_string in move_strings:
+            trajectory_str += move_string + '\n'
+        trajectory_str += down_str + '\n'
+
+        self.trajectories[name] = {'pulse_time': pulse_time,
+                                   'step_number': len(distances)}
+
+        for ind, positioner in enumerate(self.traj_positioners):
+            self.trajectories[name][positioner + 'ramp'] = ramp[ind]
+
+        ret = False
+        try:
+            self.upload_trajectory_file(name + '.trj', trajectory_str)
+            ret = True
+            logger.info('Trajectory File uploaded.')
+        except:
+            logger.info('Failed to upload trajectory file')
+            pass
+        return trajectory_str
+
+    def run_line_trajectory_general(self, name='default', verbose=False, save=True,
+                                    outfile='Gather.dat'):
+        """run trajectory in PVT mode"""
+        traj = self.trajectories.get(name, None)
+        if traj is None:
+            logger.error('Cannot find trajectory named %s' % name)
+            return
+
+        traj_file = '%s.trj' % name
+        dtime = traj['pulse_time']
+        ramps = []
+        for positioner in self.traj_positioners:
+            ramps.append(-traj[positioner + 'ramp'])
+        ramps = np.array(ramps)
+
+        try:
+            step_number = traj['step_number']
+        except KeyError:
+            step_number = 1
+
+        self._xps.GroupMoveRelative(self._sid, self.traj_group, ramps)
+
+        self.gather_outputs = []
+        gather_titles = []
+
+        for positioner in self.traj_positioners:
+            for out in xps_config['GATHER OUTPUTS']:
+                self.gather_outputs.append('%s.%s.%s' % (self.traj_group, positioner, out))
+                gather_titles.append('%s.%s' % (positioner, out))
+        self.gather_titles = "%s\n#%s\n" % (xps_config['GATHER TITLES'],
+                                            "  ".join(gather_titles))
+
+        self._xps.GatheringReset(self._sid)
+        self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
+
+        print("step_number", step_number)
+        ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
+                                                      2, step_number + 1, dtime)
+        ret = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
+
+        buffer = ('Always', self.traj_group + '.PVT.TrajectoryPulse')
+        o = self._xps.EventExtendedConfigurationTriggerSet(self._sid, buffer,
+                                                          ('0', '0'), ('0', '0'),
+                                                          ('0', '0'), ('0', '0'))
+
+        o = self._xps.EventExtendedConfigurationActionSet(self._sid, ('GatheringOneData',),
+                                                         ('',), ('',), ('',), ('',))
+
+        eventID, m = self._xps.EventExtendedStart(self._sid)
+
+        ret = self._xps.MultipleAxesPVTExecution(self._sid, self.traj_group, traj_file, 1)
+        o = self._xps.EventExtendedRemove(self._sid, eventID)
+        o = self._xps.GatheringStop(self._sid)
+
+        npulses = 0
+        if save:
+            npulses, outbuff = self.read_and_save(outfile)
+
+        self._xps.GroupMoveRelative(self._sid, self.traj_group, ramps)
+        return npulses
+
+
 
 if __name__ == '__main__':
     import sys
