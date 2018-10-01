@@ -938,16 +938,34 @@ class NewportXPS:
 
         self._xps.GroupMoveRelative(self._sid, self.traj_group, ramps)
 
-        self.gather_outputs = []
-        gather_titles = []
+        # self.gather_outputs = []
+        ##  gather_titles = []
 
-        for positioner in self.traj_positioners:
-            for out in xps_config['GATHER OUTPUTS']:
-                self.gather_outputs.append('%s.%s.%s' % (self.traj_group, positioner, out))
-                gather_titles.append('%s.%s' % (positioner, out))
-        self.gather_titles = "%s\n#%s\n" % (xps_config['GATHER TITLES'],
-                                            "  ".join(gather_titles))
+        # for positioner in self.traj_positioners:
+        #     for out in self.gather_outputs:
+        #         self.gather_outputs.append('%s.%s.%s' % (self.traj_group, positioner, out))
+        #        gather_titles.append('%s.%s' % (positioner, out))
+        ## self.gather_titles = "%s\n#%s\n" % (xps_config['GATHER TITLES'],
+        ##                                     "  ".join(gather_titles))
 
+		
+		outputs = []
+        for out in self.gather_outputs:
+            for i, ax in enumerate(traj['axes']):
+                outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
+                # move_kws[ax] = float(traj['start'][i])
+
+
+        end_segment = traj['nsegments'] - 1 + self.extra_triggers
+        # self.move_group(self.traj_group, **move_kws)
+        self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
+
+		
+		
+		
+		
+		
+		
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
 
