@@ -10,9 +10,6 @@ from six.moves import StringIO
 from six.moves.configparser import  ConfigParser
 import numpy as np
 
-import logging
-logger = logging.getLevelName(__name__)
-
 from .XPS_C8_drivers import XPS, XPSException
 
 from .debugtime import debugtime
@@ -832,44 +829,43 @@ class NewportXPS:
                                          pulse_time=0.1, scan_time=10.0):
         """
         Clemens' code for line trajectories -- should probably be
-        converted to use define_line_trajectories(), 
-        """ 
+        unified with define_line_trajectories(),
+        """
         if start_values is None:
             start_values = np.zeros(len(self.traj_positioners))
         else:
             start_values = np.array(start_values)
 
         if stop_values is None:
-            stop_values = [np.zeros(len(self.traj_positioners))]
+            stop_values = np.zeros(len(self.traj_positioners))
         else:
             stop_values = np.array(stop_values)
 
+        if len(stop_values.shape) > 2:
+            print("Cannot yet do multi-segment lines")
+
+
         if accel_values is None:
             accel_values = []
-            for positioner in self.traj_positioners:
-                response = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid,
-                                                                                self.traj_group + '.' + positioner)
-                accel_values.append(response[2] / 3.0)
+            for posname in self.traj_positioners:
+                accel = 0.5 * self.stages["%s.%s"%(self.traj_group,  posname)]['max_accel']
+                accel_values.append(accel)
         accel_values = np.array(accel_values)
 
-        distances = []
-        velocities = []
-        temp_start_values = start_values
-        for ind, values in enumerate(stop_values):
-            distances.append((values - temp_start_values) * 1.0)
-            velocities.append(distances[-1] / scan_time * len(stop_values))
-            temp_start_values = values
+        distances = stop_values - start_values
+        velocities = abs(distances / (scan_time))
+        scan_time = float(abs(scan_time))
 
-        ramp_time = np.max(abs(velocities[0] / accel_values))
-        scan_time = float(abs(scan_time)) / len(stop_values)
-        ramp = 0.5 * velocities[0] * ramp_time
+        ramp_time = 1.5 * max(abs(velocities / accel_values))
+        ramp      = velocities * ramp_time
+        print("ramp : ", ramp_time, ramp)
 
         ramp_attr = {'ramptime': ramp_time}
         down_attr = {'ramptime': ramp_time}
 
         for ind, positioner in enumerate(self.traj_positioners):
             ramp_attr[positioner + 'ramp'] = ramp[ind]
-            ramp_attr[positioner + 'velo'] = velocities[0][ind]
+            ramp_attr[positioner + 'velo'] = velocities[ind]
 
             down_attr[positioner + 'ramp'] = ramp[ind]
             down_attr[positioner + 'zero'] = 0
@@ -877,22 +873,21 @@ class NewportXPS:
         ramp_template = "%(ramptime)f"
         move_template = "%(scantime)f"
         down_template = "%(ramptime)f"
-        
+
         for positioner in self.traj_positioners:
             ramp_template += ", %({0}ramp)f, %({0}velo)f".format(positioner)
             move_template += ", %({0}dist)f, %({0}velo)f".format(positioner)
             down_template += ", %({0}ramp)f, %({0}zero)f".format(positioner)
-        
+
         ramp_str = ramp_template % ramp_attr
         down_str = down_template % down_attr
         move_strings = []
 
-        for ind in range(len(distances)):
-            attr = {'scantime': scan_time}
-            for pos_ind, positioner in enumerate(self.traj_positioners):
-                attr[positioner + 'dist'] = distances[ind][pos_ind]
-                attr[positioner + 'velo'] = velocities[ind][pos_ind]
-            move_strings.append(move_template % attr)
+        attr = {'scantime': scan_time}
+        for pos_ind, positioner in enumerate(self.traj_positioners):
+            attr[positioner + 'dist'] = distances[pos_ind]
+            attr[positioner + 'velo'] = velocities[pos_ind]
+        move_strings.append(move_template % attr)
 
         #construct trajectory:
         trajectory_str = ramp_str + '\n'
@@ -908,12 +903,12 @@ class NewportXPS:
 
         ret = False
         try:
-            self.upload_trajectory_file(name + '.trj', trajectory_str)
+            self.upload_trajectory(name + '.trj', trajectory_str)
             ret = True
-            logger.info('Trajectory File uploaded.')
+            print('Trajectory File uploaded.')
         except:
-            logger.info('Failed to upload trajectory file')
-            pass
+            print('Failed to upload trajectory file')
+
         return trajectory_str
 
     def run_line_trajectory_general(self, name='default', verbose=False, save=True,
@@ -921,7 +916,7 @@ class NewportXPS:
         """run trajectory in PVT mode"""
         traj = self.trajectories.get(name, None)
         if traj is None:
-            logger.error('Cannot find trajectory named %s' % name)
+            print('Cannot find trajectory named %s' % name)
             return
 
         traj_file = '%s.trj' % name
@@ -948,8 +943,7 @@ class NewportXPS:
         ## self.gather_titles = "%s\n#%s\n" % (xps_config['GATHER TITLES'],
         ##                                     "  ".join(gather_titles))
 
-		
-		outputs = []
+        outputs = []
         for out in self.gather_outputs:
             for i, ax in enumerate(traj['axes']):
                 outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
@@ -960,12 +954,7 @@ class NewportXPS:
         # self.move_group(self.traj_group, **move_kws)
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
 
-		
-		
-		
-		
-		
-		
+
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
 
