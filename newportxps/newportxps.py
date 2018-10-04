@@ -192,7 +192,7 @@ class NewportXPS:
         for sname in self.stages:
             ret = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid, sname)
             self.stages[sname]['max_velo']  = ret[1]
-            self.stages[sname]['max_accel'] = ret[2]
+            self.stages[sname]['max_accel'] = ret[2]/3.0
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
             self.stages[sname]['low_limit']  = ret[1]
             self.stages[sname]['high_limit'] = ret[2]
@@ -568,7 +568,7 @@ class NewportXPS:
         stage = "%s.%s" % (self.traj_group, axis)
 
         max_velo  = 0.75*self.stages[stage]['max_velo']
-        max_accel = 0.50*self.stages[stage]['max_accel']
+        max_accel = self.stages[stage]['max_accel']
         if accel is None:
             accel = max_accel
         accel = min(accel, max_accel)
@@ -835,13 +835,14 @@ class NewportXPS:
             stop_values = np.array(stop_values)
 
         if len(stop_values.shape) > 2:
-            print("Cannot yet do multi-segment lines")
+            stop_values = stop_values[0]
+            print("Cannot yet do multi-segment lines -- only doing first section")
 
 
         if accel_values is None:
             accel_values = []
             for posname in self.traj_positioners:
-                accel = 0.5 * self.stages["%s.%s"%(self.traj_group,  posname)]['max_accel']
+                accel = self.stages["%s.%s"%(self.traj_group,  posname)]['max_accel']
                 accel_values.append(accel)
         accel_values = np.array(accel_values)
 
