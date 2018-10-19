@@ -121,11 +121,13 @@ class NewportXPS:
                 self.ftphome = '/Admin'
         self.read_systemini()
 
-    def check_error(self, err, msg=''):
+    def check_error(self, err, msg='', with_raise=True):
         if err is not 0:
             err = "%d" % err
             desc = self._xps.errorcodes.get(err, 'unknown error')
-            raise XPSException("%s %s [Error %s]" % (msg, desc, err))
+            print("XPSError: message= %s, error=%s, description=%s" % (msg, err, desc))
+            if with_raise:
+                raise XPSException("%s %s [Error %s]" % (msg, desc, err))
 
     def save_systemini(self, fname='system.ini'):
         """
@@ -449,8 +451,9 @@ class NewportXPS:
         if group is None:
             print("Do have a group to move")
             return
-        err, ret = self._xps.GroupMoveAbort(self._sid, group)
-        self.check_error(err, msg="Aborting '%s'" % (group))
+        ret = self._xps.GroupMoveAbort(self._sid, group)
+        print('abort group ', group, ret)
+
 
     @withConnectedXPS
     def move_group(self, group=None, **kws):
@@ -682,13 +685,14 @@ class NewportXPS:
         err, ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
                                                            2, end_segment,
                                                            traj['pixeltime'])
-        self.check_error(err, msg="PVTPulseOutputSet")
+        self.check_error(err, msg="PVTPulseOutputSet", with_raise=False)
         if verbose:
             print(" PVTPulse  ", ret)
         err, ret = self._xps.MultipleAxesPVTVerification(self._sid,
                                                          self.traj_group,
                                                          self.traj_file)
-        self.check_error(err, msg="PVTVerification")
+
+        self.check_error(err, msg="PVTVerification", with_raise=False)
         if verbose:
             print(" PVTVerify  ", ret)
         self.traj_state = ARMED
@@ -732,7 +736,7 @@ class NewportXPS:
         err, ret = self._xps.MultipleAxesPVTExecution(self._sid,
                                                       self.traj_group,
                                                       self.traj_file, 1)
-        self.check_error(err, msg="PVT Execute")
+        self.check_error(err, msg="PVT Execute", with_raise=False)
         if verbose:
             print( " PVT Execute  ", ret)
 
