@@ -567,8 +567,11 @@ class NewportXPS:
             print("Must define a trajectory group first!")
             return
 
-        axis =  axis.upper()
-        stage = "%s.%s" % (self.traj_group, axis)
+        for axname in (axis, axis.upper(), axis.lower(), axis.title()):
+            stage = "%s.%s" % (self.traj_group, axname)
+            if stage in self.stages:
+                break
+
 
         max_velo  = 0.75*self.stages[stage]['max_velo']
         max_accel = self.stages[stage]['max_accel']
