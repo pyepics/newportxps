@@ -282,16 +282,19 @@ class NewportXPS:
 
 
     @withConnectedXPS
-    def _group_act(self, method, group=None, action='doing something with'):
+    def _group_act(self, method, group=None, action='doing something',
+                   with_raise=True):
         """wrapper for many group actions"""
         method = getattr(self._xps, method)
         if group is None:
             for group in self.groups:
                 err, ret = method(self._sid, group)
-                self.check_error(err, msg="%s group '%s'" % (action, group))
+                self.check_error(err, msg="%s group '%s'" % (action, group),
+                                 with_raise=with_raise)
         elif group in self.groups:
             err, ret = method(self._sid, group)
-            self.check_error(err, msg="%s group '%s'" % (action, group))
+            self.check_error(err, msg="%s group '%s'" % (action, group),
+                             with_raise=with_raise)
         else:
             raise ValueError("Group '%s' not found" % group)
 
@@ -322,7 +325,8 @@ class NewportXPS:
             self.home_group(group=g)
 
 
-    def initialize_group(self, group=None, with_encoder=True, home=False):
+    def initialize_group(self, group=None, with_encoder=True, home=False,
+                         with_raise=True):
         """
         initialize groups, optionally homing each.
 
@@ -333,11 +337,12 @@ class NewportXPS:
         method = 'GroupInitialize'
         if with_encoder:
             method  = 'GroupInitializeWithEncoderCalibration'
-        self._group_act(method, group=group, action='initializing')
+        self._group_act(method, group=group, action='initializing',
+                        with_raise=with_raise)
         if home:
-            self.home_group(group=group)
+            self.home_group(group=group, with_raise=with_raise)
 
-    def home_group(self, group=None):
+    def home_group(self, group=None, with_raise=True):
         """
         home group
 
@@ -347,7 +352,8 @@ class NewportXPS:
         Notes:
             if group is `None`, all groups will be homed.
         """
-        self._group_act('GroupHomeSearch', group=group, action='homing')
+        self._group_act('GroupHomeSearch', group=group, action='homing',
+                        with_raise=with_raise)
 
     def enable_group(self, group=None):
         """enable group
