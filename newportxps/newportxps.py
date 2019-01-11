@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 import os
+import sys
 import time
 import socket
 from collections import OrderedDict
@@ -193,11 +194,17 @@ class NewportXPS:
 
         for sname in self.stages:
             ret = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid, sname)
-            self.stages[sname]['max_velo']  = ret[1]
-            self.stages[sname]['max_accel'] = ret[2]/3.0
+            try:
+                self.stages[sname]['max_velo']  = ret[1]
+                self.stages[sname]['max_accel'] = ret[2]/3.0
+            except:
+                print("could not set max velo/accel for %s" % sname)
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
-            self.stages[sname]['low_limit']  = ret[1]
-            self.stages[sname]['high_limit'] = ret[2]
+            try:
+                self.stages[sname]['low_limit']  = ret[1]
+                self.stages[sname]['high_limit'] = ret[2]
+            except:
+                print("could not set limits for %s" % sname)
 
         return self.groups
 
