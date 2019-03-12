@@ -585,9 +585,11 @@ class NewportXPS:
             if stage in self.stages:
                 break
 
+        # print(" Stage ", stage,  self.stages[stage])
 
-        max_velo  = 0.75*self.stages[stage]['max_velo']
+        max_velo  = self.stages[stage]['max_velo']
         max_accel = self.stages[stage]['max_accel']
+
         if accel is None:
             accel = max_accel
         accel = min(accel, max_accel)
@@ -597,16 +599,19 @@ class NewportXPS:
             scandir = -1.0
         step = scandir*abs(step)
 
-        npulses = 1 + int((abs(stop - start) + abs(step)*0.1) / abs(step))
+        npulses = int((abs(stop - start) + abs(step)*1.1) / abs(step))
         scantime = float(abs(scantime))
         pixeltime= scantime / (npulses-1)
-
         scantime = pixeltime*npulses
+
         distance = (abs(stop - start) + abs(step))*1.0
         velocity = min(distance/scantime, max_velo)
-        ramptime = 1.5 * abs(velocity/accel)
-        rampdist = velocity * ramptime * scandir
 
+        ramptime  = 1.5 * abs(velocity/accel)
+        rampdist  = 0.5 * accel * ramptime * ramptime
+
+        # print("scantime=%.4f, pixeltime=%.4f " % (scantime, pixeltime))
+        # print(">> rampaccel: ", 2*rampdist/(ramptime*ramptime), accel)
 
         self.trajectories['foreward'] = {'axes': [axis],
                                          'start': [start-step/2.0-rampdist],
@@ -623,7 +628,7 @@ class NewportXPS:
                                          'nsegments': 3}
 
         base = {'start': start, 'stop': stop, 'step': step,
-                'velo': velocity, 'ramp': rampdist, 'dist': distance}
+                'velo': velocity, 'ramp': scandir*rampdist, 'dist': distance}
         fore = {'ramptime': ramptime, 'scantime': scantime}
         for attr in base:
             for ax in self.traj_positioners:
@@ -639,9 +644,8 @@ class NewportXPS:
             back["%s_%s" % (axis, attr)] *= -1.0
 
         if verbose:
-            print("TRAJ Text Fore:")
+            print("TRAJ Text Fore, Back:")
             print(self.linear_template % fore)
-            print("TRAJ Text Back:")
             print(self.linear_template % back)
 
         ret = True
