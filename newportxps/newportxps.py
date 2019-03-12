@@ -587,8 +587,8 @@ class NewportXPS:
 
         # print(" Stage ", stage,  self.stages[stage])
 
-        max_velo  = self.stages[stage]['max_velo']
-        max_accel = self.stages[stage]['max_accel']
+        max_velo  = 0.75*self.stages[stage]['max_velo']
+        max_accel = 0.75*self.stages[stage]['max_accel']
 
         if accel is None:
             accel = max_accel
@@ -609,9 +609,6 @@ class NewportXPS:
 
         ramptime  = 1.5 * abs(velocity/accel)
         rampdist  = 0.5 * accel * ramptime * ramptime
-
-        # print("scantime=%.4f, pixeltime=%.4f " % (scantime, pixeltime))
-        # print(">> rampaccel: ", 2*rampdist/(ramptime*ramptime), accel)
 
         self.trajectories['foreward'] = {'axes': [axis],
                                          'start': [start-step/2.0-rampdist],
