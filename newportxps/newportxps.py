@@ -607,7 +607,7 @@ class NewportXPS:
         distance = (abs(stop - start) + abs(step))*1.0
         velocity = min(distance/scantime, max_velo)
 
-        ramptime  = 1.5 * abs(velocity/accel)
+        ramptime  = max(0.0005, 2.0 * abs(velocity/accel))
         rampdist  = 0.5 * accel * ramptime * ramptime
 
         self.trajectories['foreward'] = {'axes': [axis],
