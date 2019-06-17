@@ -212,6 +212,18 @@ class NewportXPS:
 
         return self.groups
 
+    def download_trajectory(self, filename):
+        """download text of trajectory file
+
+        Arguments:
+        ----------
+           filename (str):  name of trajectory file
+           text  (str):   full text of trajectory file
+        """
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(os.path.join(self.ftphome, 'Public', 'Trajectories'))
+        self.ftpconn.save(filename, filename)
+        self.ftpconn.close()
 
     def upload_trajectory(self, filename,  text):
         """upload text of trajectory file
