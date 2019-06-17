@@ -120,7 +120,11 @@ class NewportXPS:
             self.ftpconn = FTPWrapper(**self.ftpargs)
             if 'XPS-C' in self.firmware_version:
                 self.ftphome = '/Admin'
-        self.read_systemini()
+        try:
+            self.read_systemini()
+        except:
+            print("Could not read system.ini!!!")
+
 
     def check_error(self, err, msg='', with_raise=True):
         if err is not 0:
@@ -221,6 +225,7 @@ class NewportXPS:
         self.ftpconn.cwd(os.path.join(self.ftphome, 'Public', 'Trajectories'))
         self.ftpconn.put(text, filename)
         self.ftpconn.close()
+
 
     def upload_systemini(self, text):
         """upload text of system.ini
@@ -586,7 +591,6 @@ class NewportXPS:
                 break
 
         # print(" Stage ", stage,  self.stages[stage])
-
         max_velo  = 0.75*self.stages[stage]['max_velo']
         max_accel = 0.75*self.stages[stage]['max_accel']
 
@@ -599,7 +603,7 @@ class NewportXPS:
             scandir = -1.0
         step = scandir*abs(step)
 
-        npulses = int((abs(stop - start) + abs(step)*1.1) / abs(step))
+        npulses  = int((abs(stop - start) + abs(step)*1.1) / abs(step))
         scantime = float(abs(scantime))
         pixeltime= scantime / (npulses-1)
         scantime = pixeltime*npulses
@@ -607,25 +611,23 @@ class NewportXPS:
         distance = (abs(stop - start) + abs(step))*1.0
         velocity = min(distance/scantime, max_velo)
 
-        ramptime  = max(0.0005, 2.0 * abs(velocity/accel))
-        rampdist  = 0.5 * accel * ramptime * ramptime
+        ramptime = max(1.e-5, abs(velocity/accel))
+        rampdist = velocity*ramptime
+        offset   = step/2.0 + scandir*rampdist
 
-        self.trajectories['foreward'] = {'axes': [axis],
-                                         'start': [start-step/2.0-rampdist],
-                                         'stop':  [stop+step/2.0+rampdist],
-                                         'pixeltime': pixeltime,
-                                         'npulses': npulses,
-                                         'nsegments': 3}
+        trajbase = {'axes': [axis], 'pixeltime': pixeltime,
+                    'npulses': npulses, 'nsegments': 3}
 
-        self.trajectories['backward'] = {'axes':  [axis],
-                                         'start': [stop+step/2.0+rampdist],
-                                         'stop':  [start-step/2.0-rampdist],
-                                         'pixeltime': pixeltime,
-                                         'npulses': npulses,
-                                         'nsegments': 3}
+        self.trajectories['foreward'] = {'start': [start-offset],
+                                         'stop':  [stop +offset]}
+        self.trajectories['foreward'].update(trajbase)
+
+        self.trajectories['backward'] = {'start': [stop +offset],
+                                         'stop':  [start-offset]}
+        self.trajectories['backward'].update(trajbase)
 
         base = {'start': start, 'stop': stop, 'step': step,
-                'velo': velocity, 'ramp': scandir*rampdist, 'dist': distance}
+                'velo': velocity, 'ramp': rampdist, 'dist': distance}
         fore = {'ramptime': ramptime, 'scantime': scantime}
         for attr in base:
             for ax in self.traj_positioners:
