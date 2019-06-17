@@ -252,6 +252,59 @@ class NewportXPS:
         self.ftpconn.close()
 
     @withConnectedXPS
+    def set_tuning(self, stage, kp=None, ki=None, kd=None, ks=None,
+                   inttime=None, dfilter=None, closedloopstatus=1,
+                   gkp=None, gki=None, gkd=None, kform=None, ffgain=None):
+        """set tuning parameters for a stage:
+        closedloopstatus, kp, ki, kd, ks, inttime, dfilter,
+        gkp, gki, gkd, kform, ffgain
+        """
+        if stage not in self.stages:
+            print("Stage '%s' not found: " % stage)
+            return
+        params = self._xps.PositionerCorrectorPIDFFVelocityGet(self._sid, stage)
+        if params[0] != 0 or len(params) != 13:
+            print("error getting tuning parameters for %s" % stage)
+            return
+
+        params = params[1:]
+        params[0] = closedloopstatus
+        if kp is not None:      params[1] = kp
+        if ki is not None:      params[2] = ki
+        if kd is not None:      params[3] = kd
+        if ks is not None:      params[4] = ks
+        if inttime is not None: params[5] = inttime
+        if dfilter is not None: params[6] = dfilter
+        if gkp is not None:     params[7] = gkp
+        if gki is not None:     params[8] = gki
+        if gkd is not None:     params[9] = gkd
+        if kform is not None:   params[10] = kform
+        if ffgain is not None:  params[11] = ffgain
+        ret = self._xps.PositionerCorrectorPIDFFVelocitySet(self._sid, stage, *params)
+
+    @withConnectedXPS
+    def get_tuning(self, stage):
+        """get tuning parameters for a stage:
+        closedloopstatus, kp, ki, kd, ks, inttime, dfilter,
+        gkp, gki, gkd, kform, ffgain
+        """
+        if stage not in self.stages:
+            print("Stage '%s' not found: " % stage)
+            return
+        params = self._xps.PositionerCorrectorPIDFFVelocityGet(self._sid, stage)
+        if params[0] != 0 or len(params) != 13:
+            print("error getting tuning parameters for %s" % stage)
+            return
+
+        params = params[1:]
+        out = {}
+        for i, name in enumerate(('closedloopstatus', 'kp', 'ki', 'kd', 'ks',
+                                  'inttime', 'dfilter', 'gkp', 'gki', 'gkd',
+                                  'kform', 'ffgain')):
+            out[name] = params[i]
+        return(out)
+
+    @withConnectedXPS
     def set_trajectory_group(self, group, reenable=False):
         """set group name for upcoming trajectories"""
         valid = False
