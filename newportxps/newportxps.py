@@ -251,6 +251,26 @@ class NewportXPS:
         self.ftpconn.put(text, 'system.ini')
         self.ftpconn.close()
 
+    def upload_stagesini(self, text):
+        """upload text of stages.ini
+
+        Arguments:
+        ----------
+           text  (str):   full text of stages.ini
+
+        Notes:
+        ------
+          you may have to read the stages.ini file with:
+          >>> fh = open('mystages.ini', 'r', encoding='ISO8859')
+          >>> text = fh.read()
+          >>> xps.upload_stageini(text)
+
+        """
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.put(text, 'system.ini')
+        self.ftpconn.close()
+
     @withConnectedXPS
     def set_tuning(self, stage, kp=None, ki=None, kd=None, ks=None,
                    inttime=None, dfilter=None, closedloopstatus=1,
@@ -657,7 +677,7 @@ class NewportXPS:
 
         # print(" Stage ", stage,  self.stages[stage])
         max_velo  = 0.75*self.stages[stage]['max_velo']
-        max_accel = 0.75*self.stages[stage]['max_accel']
+        max_accel = 0.5*self.stages[stage]['max_accel']
 
         if accel is None:
             accel = max_accel
@@ -676,7 +696,7 @@ class NewportXPS:
         distance = (abs(stop - start) + abs(step))*1.0
         velocity = min(distance/scantime, max_velo)
 
-        ramptime = max(1.e-5, abs(velocity/accel))
+        ramptime = max(2.e-5, abs(velocity/accel))
         rampdist = velocity*ramptime
         offset   = step/2.0 + scandir*rampdist
 
