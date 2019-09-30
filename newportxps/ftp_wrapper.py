@@ -6,6 +6,11 @@ import ftplib
 import six
 from .utils import six, bytes2str, bytesio, FTP_ENCODING
 
+import logging
+logger = logging.getLogger('paramiko')
+logger.setLevel(logging.ERROR)
+
+
 HAS_PYSFTP = False
 try:
     import pysftp

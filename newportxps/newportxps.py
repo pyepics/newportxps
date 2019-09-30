@@ -1007,7 +1007,7 @@ class NewportXPS:
         try:
             self.upload_trajectory(name + '.trj', trajectory_str)
             ret = True
-            print('Trajectory File uploaded.')
+            # print('Trajectory File uploaded.')
         except:
             print('Failed to upload trajectory file')
 
