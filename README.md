@@ -16,7 +16,7 @@ look like this:
 
 ```python
  >>> from newportxps import NewportXPS
- >>> xps = NewportXPS('164.54.160.000', user='Administrator', password='Please.Let.Me.In')
+ >>> xps = NewportXPS('164.54.160.000', username='Administrator', password='Please.Let.Me.In')
  >>> print(xps.status_report())
  # XPS host:         164.54.160.000 (164.54.160.000)
  # Firmware:         XPS-D-N13006
