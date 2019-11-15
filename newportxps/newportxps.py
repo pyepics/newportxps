@@ -543,7 +543,7 @@ class NewportXPS:
             min_jerktime = jt0_cur
         if max_jerktime is None:
             max_jerktime = jt1_cur
-        self._xps.PositionerSGammaParametersGet(self._sid, stage, vel, accl,
+        self._xps.PositionerSGammaParametersSet(self._sid, stage, velo, accl,
                                                 min_jerktime, max_jerktime)
 
     @withConnectedXPS
