@@ -14,6 +14,8 @@ logger.setLevel(logging.ERROR)
 HAS_PYSFTP = False
 try:
     import pysftp
+    cnopts = pysftp.CnOpts()
+    cnopts.hostkeys = None # disable hostkey checking. Warning: Security risk.
     HAS_PYSFTP = True
 except ImportError:
     pass
@@ -72,7 +74,8 @@ class SFTPWrapper(FTPBaseWrapper):
 
         self._conn = pysftp.Connection(self.host,
                                        username=self.username,
-                                       password=self.username)
+                                       password=self.username,
+                                       cnopts=cnopts)
 
     def save(self, remotefile, localfile):
         "save remote file to local file"
