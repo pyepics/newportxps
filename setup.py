@@ -9,4 +9,5 @@ setup(name = 'newportxps',
       license = 'BSD',
       description = 'Python interface to Newport XPS controllers',
       packages = ['newportxps'],
+	  install_requires = ['pysftp']
       )
