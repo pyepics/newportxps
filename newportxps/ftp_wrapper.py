@@ -14,8 +14,6 @@ logger.setLevel(logging.ERROR)
 HAS_PYSFTP = False
 try:
     import pysftp
-    cnopts = pysftp.CnOpts()
-    cnopts.hostkeys = None # disable hostkey checking. Warning: Security risk.
     HAS_PYSFTP = True
 except ImportError:
     pass
@@ -71,11 +69,16 @@ class SFTPWrapper(FTPBaseWrapper):
 
         if not HAS_PYSFTP:
             raise ValueError("pysftp not installed.")
+        try:
+            self._conn = pysftp.Connection(self.host,
+                                           username=self.username,
+                                           password=self.username)
+        except:
+            print("ERROR: sftp connection to %s failed" % self.host)
+            print("You may need to add the host keys for your XPS to your")
+            print("ssh known_hosts file, using a command like this:")
+            print("  ssh-keyscan %s >> ~/.ssh/known_hosts" % self.host)
 
-        self._conn = pysftp.Connection(self.host,
-                                       username=self.username,
-                                       password=self.username,
-                                       cnopts=cnopts)
 
     def save(self, remotefile, localfile):
         "save remote file to local file"
