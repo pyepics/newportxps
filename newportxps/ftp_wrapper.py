@@ -72,7 +72,7 @@ class SFTPWrapper(FTPBaseWrapper):
         try:
             self._conn = pysftp.Connection(self.host,
                                            username=self.username,
-                                           password=self.username)
+                                           password=self.password)
         except:
             print("ERROR: sftp connection to %s failed" % self.host)
             print("You may need to add the host keys for your XPS to your")
