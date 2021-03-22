@@ -82,7 +82,7 @@ class SFTPWrapper(FTPBaseWrapper):
 
     def save(self, remotefile, localfile):
         "save remote file to local file"
-        self._conn.get(remotefile, remotefile)
+        self._conn.get(remotefile, localfile)
 
     def getlines(self, remotefile):
         "read text of remote file"
