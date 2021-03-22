@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 import os
+import posixpath
 import sys
 import time
 import socket
@@ -141,7 +142,7 @@ class NewportXPS:
         fname  (string): name of file to save to ['system.ini']
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
         self.ftpconn.save('system.ini', fname)
         self.ftpconn.close()
 
@@ -152,7 +153,7 @@ class NewportXPS:
            fname  (string): name of file to save to ['stages.ini']
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
         self.ftpconn.save('stages.ini', fname)
         self.ftpconn.close()
 
@@ -161,7 +162,7 @@ class NewportXPS:
         this is part of the connection process
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
         lines = self.ftpconn.getlines('system.ini')
         self.ftpconn.close()
 
@@ -221,7 +222,7 @@ class NewportXPS:
            text  (str):   full text of trajectory file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Public', 'Trajectories'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Trajectories'))
         self.ftpconn.save(filename, filename)
         self.ftpconn.close()
 
@@ -234,7 +235,7 @@ class NewportXPS:
            text  (str):   full text of trajectory file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Public', 'Trajectories'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Trajectories'))
         self.ftpconn.put(text, filename)
         self.ftpconn.close()
 
@@ -247,7 +248,7 @@ class NewportXPS:
            text  (str):   full text of system.ini
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
         self.ftpconn.put(text, 'system.ini')
         self.ftpconn.close()
 
@@ -267,7 +268,7 @@ class NewportXPS:
 
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(os.path.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
         self.ftpconn.put(text, 'system.ini')
         self.ftpconn.close()
 
@@ -375,7 +376,7 @@ class NewportXPS:
         trajline2 = (','.join(trajline2)).strip()
         trajline3 = (','.join(trajline3)).strip()
         self.linear_template = '\n'.join(['', trajline1, trajline2, trajline3])
-        self.linear_template = '\n'.join(['', trajline1, trajline2, trajline3,''])
+        self.linear_template = '\n'.join(['', trajline1, trajline2, trajline3, ''])
 
 
     @withConnectedXPS
