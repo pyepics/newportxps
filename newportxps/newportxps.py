@@ -7,7 +7,7 @@ import sys
 import time
 import socket
 from collections import OrderedDict
-
+from .debugtime import debugtime
 from six.moves import StringIO
 from six.moves.configparser import  ConfigParser
 import numpy as np
@@ -128,7 +128,7 @@ class NewportXPS:
 
 
     def check_error(self, err, msg='', with_raise=True):
-        if err is not 0:
+        if err != 0:
             err = "%d" % err
             desc = self._xps.errorcodes.get(err, 'unknown error')
             print("XPSError: message= %s, error=%s, description=%s" % (msg, err, desc))
@@ -870,15 +870,19 @@ class NewportXPS:
         """
         read gathering data from XPS
         """
+        dt = debugtime()
         self.traj_state = READING
         ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
+        dt.add("gather num %d %d" % (ret, npulses))
         counter = 0
         while npulses < 1 and counter < 5:
             counter += 1
-            time.sleep(0.5)
+            time.sleep(0.25)
             ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
+        dt.add("gather before multilinesget")
         ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
+        dt.add("gather after multilinesget  %d" % ret)
         nchunks = -1
         if ret < 0:  # gathering too long: need to read in chunks
             nchunks = 3
@@ -902,13 +906,15 @@ class NewportXPS:
                                                                 npulses-nchunks*nx)
             buff.append(xbuff)
             buff = ''.join(buff)
-
+        dt.add("gather after got buffer  %d" % len(buff))
         obuff = buff[:]
         for x in ';\r\t':
             obuff = obuff.replace(x,' ')
+        dt.add("gather cleaned buffer  %d" % len(obuff))
 
         if set_idle_when_done:
             self.traj_state = IDLE
+        #dt.show()
         return npulses, obuff
 
     def save_gathering_file(self, fname, buffer, verbose=False, set_idle_when_done=True):
