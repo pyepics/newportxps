@@ -233,7 +233,7 @@ class XPS:
 
     # TimerSet :  Set a timer
     def TimerSet (self, socketId, TimerName, FrequencyTicks):
-        return self.Send(socketId, 'TimerSet(%s, %s)' (TimerName, str(FrequencyTicks)))
+        return self.Send(socketId, 'TimerSet(%s, %s)' % (TimerName, str(FrequencyTicks)))
 
     # Reboot :  Reboot the controller
     def Reboot (self, socketId):
