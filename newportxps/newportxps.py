@@ -165,12 +165,13 @@ class NewportXPS:
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
         lines = self.ftpconn.getlines('system.ini')
         self.ftpconn.close()
+        initext = '\n'.join([line.strip() for line in lines])
 
         pvtgroups = []
         self.stages= OrderedDict()
         self.groups = OrderedDict()
         sconf = ConfigParser()
-        sconf.readfp(StringIO('\n'.join(lines)))
+        sconf.readfp(StringIO(initext))
 
         # read and populate lists of groups first
         for gtype, glist in sconf.items('GROUPS'): # ].items():
