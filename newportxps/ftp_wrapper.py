@@ -2,7 +2,7 @@
 
 import os
 import ftplib
-from io import StringIO
+from io import BytesIO
 from .utils import str2bytes, bytes2str, ENCODING
 
 import logging
@@ -85,14 +85,14 @@ class SFTPWrapper(FTPBaseWrapper):
 
     def getlines(self, remotefile):
         "read text of remote file"
-        tmp = StringIO()
+        tmp = BytesIO()
         self._conn.getfo(remotefile, tmp)
         tmp.seek(0)
         text = bytes2str(tmp.read())
         return text.split('\n')
 
     def put(self, text, remotefile):
-        txtfile = StringIO(str2bytes(text))
+        txtfile = BytesIO(str2bytes(text))
         self._conn.putfo(txtfile, remotefile)
 
 
@@ -130,5 +130,5 @@ class FTPWrapper(FTPBaseWrapper):
         return text.split('\n')
 
     def put(self, text, remotefile):
-        txtfile = StringIO(str2bytes(text))
+        txtfile = BytesIO(str2bytes(text))
         self._conn.storbinary('STOR %s' % remotefile, txtfile)
