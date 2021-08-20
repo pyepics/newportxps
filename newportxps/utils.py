@@ -6,7 +6,7 @@ def bytes2str(s):
     'byte to string conversion'
     if isinstance(s, str):
         return s
-    elif isinstance(s, bytes):
+    if isinstance(s, bytes):
         return str(s, ENCODING)
     else:
         return str(s)
@@ -15,8 +15,6 @@ def str2bytes(s):
     'string to bytes conversion'
     if isinstance(s, bytes):
         return s
-    elif isinstance(s, str):
-        return s.encode(ENCODING)
-    else:
-        return bytes(str(s), ENCODING)
-    
+    if not isinstance(s, str):
+        s = str(s)
+    return s.encode(ENCODING)
