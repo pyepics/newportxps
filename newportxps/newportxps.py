@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
 import os
 import posixpath
 import sys
 import time
 import socket
-from collections import OrderedDict
-from .debugtime import debugtime
-from six.moves import StringIO
-from six.moves.configparser import  ConfigParser
+from io import StringIO
+from configparser import  ConfigParser
 import numpy as np
+
+from .debugtime import debugtime
+
 
 from .XPS_C8_drivers import XPS, XPSException
 
@@ -57,8 +57,8 @@ class NewportXPS:
         self.traj_file = None
         self.traj_positioners = None
 
-        self.stages = OrderedDict()
-        self.groups = OrderedDict()
+        self.stages = {}
+        self.groups = {}
         self.firmware_version = None
 
         self.ftpconn = None
@@ -168,8 +168,8 @@ class NewportXPS:
         initext = '\n'.join([line.strip() for line in lines])
 
         pvtgroups = []
-        self.stages= OrderedDict()
-        self.groups = OrderedDict()
+        self.stages= {}
+        self.groups = {}
         sconf = ConfigParser()
         sconf.readfp(StringIO(initext))
 
@@ -178,7 +178,7 @@ class NewportXPS:
             if len(glist) > 0:
                 for gname in glist.split(','):
                     gname = gname.strip()
-                    self.groups[gname] = OrderedDict()
+                    self.groups[gname] = {}
                     self.groups[gname]['category'] = gtype.strip()
                     self.groups[gname]['positioners'] = []
                     if gtype.lower().startswith('multiple'):
@@ -482,7 +482,7 @@ class NewportXPS:
         """
         get dictionary of status for each group
         """
-        out = OrderedDict()
+        out = {}
         for group in self.groups:
             err, stat = self._xps.GroupStatusGet(self._sid, group)
             self.check_error(err, msg="GroupStatus '%s'" % (group))
@@ -498,7 +498,7 @@ class NewportXPS:
         """
         get dictionary of hardware status for each stage
         """
-        out = OrderedDict()
+        out = {}
         for stage in self.stages:
             if stage in ('', None): continue
             err, stat = self._xps.PositionerHardwareStatusGet(self._sid, stage)
@@ -514,7 +514,7 @@ class NewportXPS:
         """
         get dictionary of positioner errors for each stage
         """
-        out = OrderedDict()
+        out = {}
         for stage in self.stages:
             if stage in ('', None): continue
             err, stat = self._xps.PositionerErrorGet(self._sid, stage)

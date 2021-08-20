@@ -14,11 +14,8 @@
 
 import sys
 import socket
-import six
-from collections import OrderedDict
 
-from .utils import bytes2str
-
+from .utils import bytes2str, str2bytes
 
 class XPSException(Exception):
     """XPS Controller Exception"""
@@ -41,7 +38,7 @@ class XPS:
         XPS.__nbSockets = 0
         for socketId in range(self.MAX_NB_SOCKETS):
             XPS.__usedSockets[socketId] = 0
-        self.errorcodes = OrderedDict()
+        self.errorcodes = {}
 
     def withValidSocket(fcn):
         """ decorator to ensure that a valid socket is passed as the
@@ -64,7 +61,7 @@ class XPS:
     def __sendAndReceive (self, socketId, command):
         # print("SEND REC ", command, type(command))
         try:
-            XPS.__sockets[socketId].send(six.b(command))
+            XPS.__sockets[socketId].send(str2bytes(command))
             ret = bytes2str(XPS.__sockets[socketId].recv(1024))
             while (ret.find(',EndOfAPI') == -1):
                 ret += bytes2str(XPS.__sockets[socketId].recv(1024))
@@ -114,7 +111,7 @@ class XPS:
             return -1
 
         err, ret = self.ErrorListGet(socketId)
-        self.errorcodes = OrderedDict()
+        self.errorcodes = {}
         for cline in ret.split(';'):
             if ':' in cline:
                 ecode, message = cline.split(':', 1)

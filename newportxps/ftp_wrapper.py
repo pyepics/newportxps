@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
 import os
 import ftplib
-import six
-from .utils import six, bytes2str, bytesio, FTP_ENCODING
+from io import StringIO
+from .utils import str2bytes, bytes2str, ENCODING
 
 import logging
 logger = logging.getLogger('paramiko')
@@ -86,14 +85,14 @@ class SFTPWrapper(FTPBaseWrapper):
 
     def getlines(self, remotefile):
         "read text of remote file"
-        tmp = bytesio()
+        tmp = StringIO()
         self._conn.getfo(remotefile, tmp)
         tmp.seek(0)
         text = bytes2str(tmp.read())
         return text.split('\n')
 
     def put(self, text, remotefile):
-        txtfile = bytesio(six.b(text))
+        txtfile = StringIO(str2bytes(text))
         self._conn.putfo(txtfile, remotefile)
 
 
@@ -120,10 +119,7 @@ class FTPWrapper(FTPBaseWrapper):
         "save remote file to local file"
         output = []
         x = self._conn.retrbinary('RETR %s' % remotefile, output.append)
-        open_opts = {}
-        if six.PY3:
-            open_opts['encoding'] = FTP_ENCODING
-        with open(localfile, 'w', **open_opts) as fout:
+        with open(localfile, 'w', encoding=FTP_ENCOPING) as fout:
             fout.write(''.join([bytes2str(s) for s in output]))
 
     def getlines(self, remotefile):
@@ -134,6 +130,5 @@ class FTPWrapper(FTPBaseWrapper):
         return text.split('\n')
 
     def put(self, text, remotefile):
-        txtfile = bytesio(six.b(text))
-        # print(" Put ", text, txtfile)
+        txtfile = StringIO(str2bytes(text))
         self._conn.storbinary('STOR %s' % remotefile, txtfile)
