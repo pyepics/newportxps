@@ -119,7 +119,7 @@ class FTPWrapper(FTPBaseWrapper):
         "save remote file to local file"
         output = []
         x = self._conn.retrbinary('RETR %s' % remotefile, output.append)
-        with open(localfile, 'w', encoding=FTP_ENCOPING) as fout:
+        with open(localfile, 'w', encoding=ENCODING) as fout:
             fout.write(''.join([bytes2str(s) for s in output]))
 
     def getlines(self, remotefile):
