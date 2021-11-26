@@ -882,7 +882,11 @@ class NewportXPS:
             ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
         dt.add("gather before multilinesget")
-        ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
+        try:
+            ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
+        except ValueError:
+            print("Failed to read gathering")
+            return (0, ' \n')
         dt.add("gather after multilinesget  %d" % ret)
         nchunks = -1
         if ret < 0:  # gathering too long: need to read in chunks
