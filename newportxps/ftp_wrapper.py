@@ -115,6 +115,10 @@ class FTPWrapper(FTPBaseWrapper):
         self._conn.connect(self.host)
         self._conn.login(self.username, self.password)
 
+    def list(self):
+        "list files in a given directory (default the current)"
+        return self._conn.nlst()
+
     def save(self, remotefile, localfile):
         "save remote file to local file"
         output = []
@@ -132,3 +136,7 @@ class FTPWrapper(FTPBaseWrapper):
     def put(self, text, remotefile):
         txtfile = BytesIO(str2bytes(text))
         self._conn.storbinary('STOR %s' % remotefile, txtfile)
+
+    def delete(self, remotefile):
+        "delete remote file"
+        self._conn.delete(remotefile)
