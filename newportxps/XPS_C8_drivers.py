@@ -1342,6 +1342,19 @@ class XPS:
         command = 'PositionerPositionCompareAquadBWindowedSet(' + PositionerName + ',' + str(MinimumPosition) + ',' + str(MaximumPosition) + ')'
         return self.Send(socketId, command)
 
+    # PositionerPositionCompareAquadBPrescalerSet: Sets PCO AquadB interpolation factor.
+    def PositionerPositionCompareAquadBPrescalerSet(self, socketId, PositionerName, PCOInterpolationFactor):
+        command = 'PositionerPositionCompareAquadBPrescalerSet(' + PositionerName + ',' + str(
+            PCOInterpolationFactor) + ')'
+        return self.Send(socketId, command)
+
+    # PositionerPositionCompareAquadBPrescalerGet : Gets PCO AquadB interpolation factor.
+    def PositionerPositionCompareAquadBPrescalerGet(self, socketId, PositionerName):
+        command = 'PositionerPositionCompareAquadBPrescalerGet(' + PositionerName + ',double *)'
+        error, returnedString = self.Send(socketId, command)
+        if (error != 0):
+            return [error, returnedString]
+
     # PositionerPositionCompareGet :  Read position compare parameters
     def PositionerPositionCompareGet (self, socketId, PositionerName):
         command = 'PositionerPositionCompareGet(' + PositionerName + ',double *,double *,double *,bool *)'
