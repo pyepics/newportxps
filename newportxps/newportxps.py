@@ -332,7 +332,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
-        self.ftpconn.put(text, 'system.ini')
+        self.ftpconn.put(text, 'stages.ini')
         self.ftpconn.close()
 
     @withConnectedXPS
