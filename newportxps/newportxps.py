@@ -240,6 +240,68 @@ class NewportXPS:
         self.ftpconn.put(text, filename)
         self.ftpconn.close()
 
+    def list_scripts(self):
+        """list all existent scripts files
+        """
+        remotefiles = ""
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        remotefiles = self.ftpconn.list()
+        self.ftpconn.close()
+
+        return remotefiles
+
+    def read_script(self, filename):
+        """read script content
+
+        Arguments:
+        ----------
+           filename (str):  name of script file
+        """
+        filecontent = ""
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        filecontent = self.ftpconn.getlines(filename)
+        self.ftpconn.close()
+
+        return filecontent
+
+    def download_script(self, filename):
+        """download script file
+
+        Arguments:
+        ----------
+           filename (str):  name of script file
+        """
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.save(filename, filename)
+        self.ftpconn.close()
+
+    def upload_script(self, filename, text):
+        """upload script file
+
+        Arguments:
+        ----------
+           filename (str):  name of script file
+           text  (str):   full text of script file
+        """
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.put(text, filename)
+        self.ftpconn.close()
+
+    def delete_script(self, filename):
+        """delete script file
+
+        Arguments:
+        ----------
+           filename (str):  name of script file
+        """
+        self.ftpconn.connect(**self.ftpargs)
+        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.delete(filename)
+        self.ftpconn.close()
 
     def upload_systemini(self, text):
         """upload text of system.ini
@@ -583,6 +645,18 @@ class NewportXPS:
             else:
                 vals.append(ret[i+1])
         self._xps.GroupMoveAbsolute(self._sid, group, vals)
+
+    @withConnectedXPS
+    def execute_script(self, script, task, arguments):
+        """
+        Execute a TCL script
+
+        Parameters:
+           script (string): name of script file
+           task (string): task name to be identified
+           arguments (string): script arguments
+        """
+        self._xps.TCLScriptExecute(self._sid, script, task, arguments)
 
     @withConnectedXPS
     def move_stage(self, stage, value, relative=False):
