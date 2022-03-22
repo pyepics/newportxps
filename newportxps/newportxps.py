@@ -861,6 +861,8 @@ class NewportXPS:
         "read and save gathering file"
         self.ngathered = 0
         npulses, buff = self.read_gathering(set_idle_when_done=False)
+        if npulses < 1:
+            return
         self.save_gathering_file(output_file, buff,
                                  verbose=False,
                                  set_idle_when_done=False)
@@ -873,7 +875,17 @@ class NewportXPS:
         """
         dt = debugtime()
         self.traj_state = READING
-        ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
+        npulses = -1
+        t0 = time.time()
+        while npulses < 1:
+            try:
+                ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
+            except SyntaxError:
+                pass
+            if time.time()-t0 > 5:
+                print("Failed to get gathering size")
+                return (0, ' \n')
+
         dt.add("gather num %d %d" % (ret, npulses))
         counter = 0
         while npulses < 1 and counter < 5:
