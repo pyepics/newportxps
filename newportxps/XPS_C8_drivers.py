@@ -2046,3 +2046,11 @@ class XPS:
     # TestTCP :  Test TCP/IP transfert
     def TestTCP (self, socketId, InputString):
         return self.Send(socketId, 'TestTCP(%s, char *)' % InputString)
+
+    # CleanCoreDumpFolder :   Remove core file in /Admin/Public/CoreDump folder
+    def CleanCoreDumpFolder (self, socketId):
+        return self.Send(socketId, 'CleanCoreDumpFolder()')
+
+    # CleanTmpFolder :   Clean the tmp folder
+    def CleanTmpFolder(self, socketId):
+        return self.Send(socketId, 'CleanTmpFolder()')
