@@ -886,9 +886,11 @@ class NewportXPS:
         The trajectory *must be in the ARMED state
         """
 
-        if clean:
-            self._xps.CleanCoreDumpFolder(self._sid)
+        if 'xps-d' in self.firmware_version.lower():
             self._xps.CleanTmpFolder(self._sid)
+
+            if clean:
+                self._xps.CleanTmpFolder(self._sid)
 
         if name in self.trajectories:
             self.arm_trajectory(name)
