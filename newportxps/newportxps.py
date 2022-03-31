@@ -890,7 +890,7 @@ class NewportXPS:
             self._xps.CleanTmpFolder(self._sid)
 
             if clean:
-                self._xps.CleanTmpFolder(self._sid)
+                self._xps.CleanCoreDumpFolder(self._sid)
 
         if name in self.trajectories:
             self.arm_trajectory(name)
