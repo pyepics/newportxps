@@ -878,13 +878,19 @@ class NewportXPS:
         self.traj_state = ARMED
 
     @withConnectedXPS
-    def run_trajectory(self, name=None, save=True,
+    def run_trajectory(self, name=None, save=True, clean=False,
                        output_file='Gather.dat', verbose=False):
 
         """run a trajectory in PVT mode
 
         The trajectory *must be in the ARMED state
         """
+
+        if 'xps-d' in self.firmware_version.lower():
+            self._xps.CleanTmpFolder(self._sid)
+
+            if clean:
+                self._xps.CleanCoreDumpFolder(self._sid)
 
         if name in self.trajectories:
             self.arm_trajectory(name)
