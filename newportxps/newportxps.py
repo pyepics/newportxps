@@ -113,7 +113,8 @@ class NewportXPS:
         self.firmware_version = val
         self.ftphome = ''
 
-        if 'XPS-D' in self.firmware_version:
+        if ('XPS-D' in self.firmware_version:
+            'HXP-D' in self.firmware_version):
             err, val = self._xps.Send(self._sid, 'InstallerVersionGet(char *)')
             self.firmware_version = val
             self.ftpconn = SFTPWrapper(**self.ftpargs)
@@ -1164,7 +1165,7 @@ class NewportXPS:
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
 
-        print("step_number", step_number)
+        # print("step_number", step_number)
         ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
                                                       2, step_number + 1, dtime)
         ret = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
