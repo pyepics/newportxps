@@ -38,7 +38,6 @@ class NewportXPS:
                  port=5001, timeout=10, extra_triggers=0,
                  outputs=('CurrentPosition', 'SetpointPosition')):
 
-        socket.setdefaulttimeout(5.0)
         try:
             host = socket.gethostbyname(host)
         except:
