@@ -116,7 +116,7 @@ class NewportXPS:
         self.firmware_version = val
         self.ftphome = ''
 
-        if 'XPS-D' in self.firmware_version:
+        if any([m in self.firmware_version for m in ['XPS-D', 'HXP-D']]):
             err, val = self._xps.Send(self._sid, 'InstallerVersionGet(char *)')
             self.firmware_version = val
             self.ftpconn = SFTPWrapper(**self.ftpargs)
@@ -335,7 +335,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
-        self.ftpconn.put(text, 'system.ini')
+        self.ftpconn.put(text, 'stages.ini')
         self.ftpconn.close()
 
     @withConnectedXPS
@@ -881,13 +881,19 @@ class NewportXPS:
         self.traj_state = ARMED
 
     @withConnectedXPS
-    def run_trajectory(self, name=None, save=True,
+    def run_trajectory(self, name=None, save=True, clean=False,
                        output_file='Gather.dat', verbose=False):
 
         """run a trajectory in PVT mode
 
         The trajectory *must be in the ARMED state
         """
+
+        if 'xps-d' in self.firmware_version.lower():
+            self._xps.CleanTmpFolder(self._sid)
+
+            if clean:
+                self._xps.CleanCoreDumpFolder(self._sid)
 
         if name in self.trajectories:
             self.arm_trajectory(name, verbose=verbose)
@@ -1166,7 +1172,7 @@ class NewportXPS:
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
 
-        print("step_number", step_number)
+        # print("step_number", step_number)
         ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
                                                       2, step_number + 1, dtime)
         ret = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
