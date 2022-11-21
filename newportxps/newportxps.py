@@ -38,11 +38,13 @@ class NewportXPS:
                  port=5001, timeout=10, extra_triggers=0,
                  outputs=('CurrentPosition', 'SetpointPosition')):
 
-        socket.setdefaulttimeout(5.0)
         try:
+            socket.setdefaulttimeout(5.0)
             host = socket.gethostbyname(host)
         except:
             raise ValueError('Could not resolve XPS name %s' % host)
+        finally:
+            socket.setdefaulttimeout(None)
         self.host = host
         self.port = port
         self.username = username
