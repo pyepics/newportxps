@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+ #!/usr/bin/env python
 
 import os
 import posixpath
@@ -57,6 +57,7 @@ class NewportXPS:
         self.traj_file = None
         self.traj_positioners = None
 
+        self.nsegments = -1
         self.stages = {}
         self.groups = {}
         self.firmware_version = None
@@ -844,11 +845,11 @@ class NewportXPS:
                 outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
                 # move_kws[ax] = float(traj['start'][i])
 
-
         end_segment = traj['nsegments'] - 1 + self.extra_triggers
+        self.nsegments = end_segment
         # self.move_group(self.traj_group, **move_kws)
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
-
+        # print("XPS Traiectory armed: ", name, self.host)
         err, ret = self._xps.GatheringReset(self._sid)
         self.check_error(err, msg="GatheringReset")
         if verbose:
@@ -860,7 +861,7 @@ class NewportXPS:
         if verbose:
             print(" GatheringConfigurationSet outputs ", outputs)
             print(" GatheringConfigurationSet returned ", ret)
-            print( end_segment, traj['pixeltime'])
+            print(" segments, pixeltime" , self.nsegments, end_segment, traj['pixeltime'])
 
         err, ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
                                                            2, end_segment,
@@ -887,7 +888,7 @@ class NewportXPS:
         """
 
         if name in self.trajectories:
-            self.arm_trajectory(name)
+            self.arm_trajectory(name, verbose=verbose)
 
         if self.traj_state != ARMED:
             raise XPSException("Must arm trajectory before running!")
@@ -947,6 +948,7 @@ class NewportXPS:
         """
         read gathering data from XPS
         """
+        # print("READ Gathering XPS ", self.host, self._sid, self.nsegments, time.ctime())
         dt = debugtime()
         self.traj_state = READING
         npulses = -1
@@ -955,12 +957,16 @@ class NewportXPS:
             try:
                 ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
             except SyntaxError:
+                print("#XPS Gathering Read failed, will try again")
                 pass
             if time.time()-t0 > 5:
-                print("Failed to get gathering size")
+                print("Failed to get gathering size after 5 seconds: return 0 points")
+                print(ret, npulses, nx, self._xps, time.ctime())
                 return (0, ' \n')
+            if npulses < 1 or ret != 0:
+                time.sleep(0.05)
 
-        dt.add("gather num %d %d" % (ret, npulses))
+        dt.add("gather num %d npulses=%d (%d)" % (ret, npulses, self.nsegments))
         counter = 0
         while npulses < 1 and counter < 5:
             counter += 1
