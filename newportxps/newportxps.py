@@ -10,10 +10,7 @@ from configparser import  ConfigParser
 import numpy as np
 
 from .debugtime import debugtime
-
-
 from .XPS_C8_drivers import XPS, XPSException
-
 from .ftp_wrapper import SFTPWrapper, FTPWrapper
 
 IDLE, ARMING, ARMED, RUNNING, COMPLETE, WRITING, READING = \
@@ -849,9 +846,8 @@ class NewportXPS:
 
         end_segment = traj['nsegments'] - 1 + self.extra_triggers
         self.nsegments = end_segment
-        # self.move_group(self.traj_group, **move_kws)
+
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
-        # print("XPS Traiectory armed: ", name, self.host)
         err, ret = self._xps.GatheringReset(self._sid)
         self.check_error(err, msg="GatheringReset")
         if verbose:
@@ -863,7 +859,7 @@ class NewportXPS:
         if verbose:
             print(" GatheringConfigurationSet outputs ", outputs)
             print(" GatheringConfigurationSet returned ", ret)
-            print(" segments, pixeltime" , self.nsegments, end_segment, traj['pixeltime'])
+            print(" segments, pixeltime" , end_segment, traj['pixeltime'])
 
         err, ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
                                                            2, end_segment,
@@ -895,7 +891,7 @@ class NewportXPS:
             if clean:
                 self._xps.CleanCoreDumpFolder(self._sid)
 
-        if name in self.trajectories:
+        if name in self.trajectories and self.traj_state != ARMED:
             self.arm_trajectory(name, verbose=verbose)
 
         if self.traj_state != ARMED:
@@ -973,7 +969,6 @@ class NewportXPS:
                 return (0, ' \n')
             if npulses < 1 or ret != 0:
                 time.sleep(0.05)
-
         dt.add("gather num %d npulses=%d (%d)" % (ret, npulses, self.nsegments))
         counter = 0
         while npulses < 1 and counter < 5:
@@ -982,6 +977,7 @@ class NewportXPS:
             ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
         dt.add("gather before multilinesget")
+
         try:
             ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
         except ValueError:
