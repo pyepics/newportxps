@@ -28,6 +28,22 @@ def withConnectedXPS(fcn):
 
     return wrapper
 
+def read_xps_file(fname):
+    """read file written by XPS, decoding bytes as latin-1"""
+    with open(fname, 'rb') as fh:
+        data = fh.read()
+    return data.decode('latin-1')
+
+def clean_text_for_upload(text):
+    buff = []
+    for line in text.split('\n'):
+        line = line.replace('\r', '').replace('\n', '') + ' '
+        buff.append(line)
+    return '\n'.join(out)
+
+
+open(fname, 'r').readlines(encoding='utf-8'):
+
 class NewportXPS:
     gather_header = '# XPS Gathering Data\n#--------------'
     def __init__(self, host, group=None,
@@ -237,7 +253,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Trajectories'))
-        self.ftpconn.put(text, filename)
+        self.ftpconn.put(clean_text_for_upload(text), filename)
         self.ftpconn.close()
 
     def list_scripts(self):
@@ -288,7 +304,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
-        self.ftpconn.put(text, filename)
+        self.ftpconn.put(clean_text_for_upload(text), filename)
         self.ftpconn.close()
 
     def delete_script(self, filename):
@@ -312,7 +328,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
-        self.ftpconn.put(text, 'system.ini')
+        self.ftpconn.put(clean_text_for_upload(text), 'system.ini')
         self.ftpconn.close()
 
     def upload_stagesini(self, text):
@@ -332,7 +348,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
-        self.ftpconn.put(text, 'stages.ini')
+        self.ftpconn.put(clean_text_for_upload(text), 'stages.ini')
         self.ftpconn.close()
 
     @withConnectedXPS
@@ -965,7 +981,7 @@ class NewportXPS:
                 pass
             if time.time()-t0 > 5:
                 print("Failed to get gathering size after 5 seconds: return 0 points")
-                print(ret, npulses, nx, self._xps, time.ctime())
+                print("Gather Returned: ", ret, npulses, nx, self._xps, time.ctime())
                 return (0, ' \n')
             if npulses < 1 or ret != 0:
                 time.sleep(0.05)
@@ -976,12 +992,11 @@ class NewportXPS:
             time.sleep(0.25)
             ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
-        dt.add("gather before multilinesget")
-
+        dt.add("gather before multilinesget, npulses=%d" % (npulses))
         try:
             ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
         except ValueError:
-            print("Failed to read gathering")
+            print("Failed to read gathering: ", ret, buff)
             return (0, ' \n')
         dt.add("gather after multilinesget  %d" % ret)
         nchunks = -1
@@ -990,7 +1005,7 @@ class NewportXPS:
             nx  = int((npulses-2) / nchunks)
             ret = 1
             while True:
-                time.sleep(0.1)
+                time.sleep(0.05)
                 ret, xbuff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, nx)
                 if ret == 0:
                     break
@@ -1012,10 +1027,10 @@ class NewportXPS:
         for x in ';\r\t':
             obuff = obuff.replace(x,' ')
         dt.add("gather cleaned buffer  %d" % len(obuff))
-
         if set_idle_when_done:
             self.traj_state = IDLE
-        #dt.show()
+        if debug_time:
+            dt.show()
         return npulses, obuff
 
     def save_gathering_file(self, fname, buffer, verbose=False, set_idle_when_done=True):
