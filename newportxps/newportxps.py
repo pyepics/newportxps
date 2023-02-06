@@ -10,6 +10,7 @@ from configparser import  ConfigParser
 import numpy as np
 
 from .debugtime import debugtime
+from .utils import clean_text
 from .XPS_C8_drivers import XPS, XPSException
 from .ftp_wrapper import SFTPWrapper, FTPWrapper
 
@@ -28,21 +29,6 @@ def withConnectedXPS(fcn):
 
     return wrapper
 
-def read_xps_file(fname):
-    """read file written by XPS, decoding bytes as latin-1"""
-    with open(fname, 'rb') as fh:
-        data = fh.read()
-    return data.decode('latin-1')
-
-def clean_text_for_upload(text):
-    buff = []
-    for line in text.split('\n'):
-        line = line.replace('\r', '').replace('\n', '') + ' '
-        buff.append(line)
-    return '\n'.join(out)
-
-
-open(fname, 'r').readlines(encoding='utf-8'):
 
 class NewportXPS:
     gather_header = '# XPS Gathering Data\n#--------------'
@@ -253,7 +239,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Trajectories'))
-        self.ftpconn.put(clean_text_for_upload(text), filename)
+        self.ftpconn.put(clean_text(text), filename)
         self.ftpconn.close()
 
     def list_scripts(self):
@@ -304,7 +290,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
-        self.ftpconn.put(clean_text_for_upload(text), filename)
+        self.ftpconn.put(clean_text(text), filename)
         self.ftpconn.close()
 
     def delete_script(self, filename):
@@ -328,7 +314,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
-        self.ftpconn.put(clean_text_for_upload(text), 'system.ini')
+        self.ftpconn.put(clean_text(text), 'system.ini')
         self.ftpconn.close()
 
     def upload_stagesini(self, text):
@@ -348,7 +334,7 @@ class NewportXPS:
         """
         self.ftpconn.connect(**self.ftpargs)
         self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
-        self.ftpconn.put(clean_text_for_upload(text), 'stages.ini')
+        self.ftpconn.put(clean_text(text), 'stages.ini')
         self.ftpconn.close()
 
     @withConnectedXPS
@@ -947,28 +933,33 @@ class NewportXPS:
         self.traj_state = COMPLETE
         npulses = 0
         if save:
-            self.read_and_save(output_file)
+            self.read_and_save(output_file, verbose=verbose)
         self.traj_state = IDLE
         return npulses
 
     @withConnectedXPS
-    def read_and_save(self, output_file):
+    def read_and_save(self, output_file, verbose=False):
         "read and save gathering file"
         self.ngathered = 0
-        npulses, buff = self.read_gathering(set_idle_when_done=False)
+        npulses, buff = self.read_gathering(set_idle_when_done=False,
+                                            verbose=verbose)
         if npulses < 1:
             return
         self.save_gathering_file(output_file, buff,
-                                 verbose=False,
+                                 verbose=verbose,
                                  set_idle_when_done=False)
         self.ngathered = npulses
 
     @withConnectedXPS
-    def read_gathering(self, set_idle_when_done=True, debug_time=False):
+    def read_gathering(self, set_idle_when_done=True, verbose=False,
+                       debug_time=False):
         """
         read gathering data from XPS
         """
-        # print("READ Gathering XPS ", self.host, self._sid, self.nsegments, time.ctime())
+        verbose = verbose or debug_time
+        if verbose:
+            print("READ Gathering XPS ", self.host, self._sid,
+                  self.nsegments, time.ctime())
         dt = debugtime()
         self.traj_state = READING
         npulses = -1
@@ -1029,18 +1020,18 @@ class NewportXPS:
         dt.add("gather cleaned buffer  %d" % len(obuff))
         if set_idle_when_done:
             self.traj_state = IDLE
-        if debug_time:
+        if verbose:
             dt.show()
         return npulses, obuff
 
-    def save_gathering_file(self, fname, buffer, verbose=False, set_idle_when_done=True):
+    def save_gathering_file(self, fname, buff, verbose=False, set_idle_when_done=True):
         """save gathering buffer read from read_gathering() to text file"""
         self.traj_state = WRITING
         f = open(fname, 'w')
         f.write(self.gather_titles)
-        f.write(buffer)
+        f.write(buff)
         f.close()
-        nlines = len(buffer.split('\n')) - 1
+        nlines = len(buff.split('\n')) - 1
         if verbose:
             print('Wrote %i lines, %i bytes to %s' % (nlines, len(buff), fname))
         if set_idle_when_done:
