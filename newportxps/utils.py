@@ -18,3 +18,16 @@ def str2bytes(s):
     if not isinstance(s, str):
         s = str(s)
     return s.encode(ENCODING)
+
+def read_xps_file(fname):
+    """read file written by XPS, decoding bytes as latin-1"""
+    with open(fname, 'rb') as fh:
+        data = fh.read()
+    return data.decode(ENCODING)
+
+def clean_text(text):
+    buff = []
+    for line in text.split('\n'):
+        line = line.replace('\r', '').replace('\n', '') + ' '
+        buff.append(line)
+    return '\n'.join(buff)
