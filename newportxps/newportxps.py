@@ -36,7 +36,6 @@ class NewportXPS:
                  username='Administrator', password='Administrator',
                  port=5001, timeout=10, extra_triggers=0,
                  outputs=('CurrentPosition', 'SetpointPosition')):
-
         try:
             socket.setdefaulttimeout(5.0)
             host = socket.gethostbyname(host)
@@ -72,6 +71,9 @@ class NewportXPS:
         self.connect()
         if group is not None:
             self.set_trajectory_group(group)
+
+    def __repr__(self):
+        return 'NewportXPS(host=%s, port=%d)' % (self.host, self.port)
 
     @withConnectedXPS
     def status_report(self):
@@ -844,9 +846,8 @@ class NewportXPS:
         for out in self.gather_outputs:
             for i, ax in enumerate(traj['axes']):
                 outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
-                # move_kws[ax] = float(traj['start'][i])
 
-        end_segment = traj['nsegments'] - 1 + self.extra_triggers
+        end_segment = traj['nsegments'] # - 1 + self.extra_triggers
         self.nsegments = end_segment
 
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
@@ -1165,11 +1166,9 @@ class NewportXPS:
                 outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
                 # move_kws[ax] = float(traj['start'][i])
 
-
         end_segment = traj['nsegments'] - 1 + self.extra_triggers
         # self.move_group(self.traj_group, **move_kws)
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
-
 
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
