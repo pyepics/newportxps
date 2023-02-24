@@ -1612,7 +1612,7 @@ class XPS:
         command = 'MultipleAxesPVTVerification(' + GroupName + ',' + TrajectoryFileName + ')'
         return self.Send(socketId, command)
     
-    # MultipleAxesPTVerification :  Multiple axes PVT trajectory verification
+    # MultipleAxesPTVerification :  Multiple axes PT trajectory verification
     def MultipleAxesPTVerification (self, socketId, GroupName, TrajectoryFileName):
         command = 'MultipleAxesPTVerification(' + GroupName + ',' + TrajectoryFileName + ')'
         return self.Send(socketId, command)
