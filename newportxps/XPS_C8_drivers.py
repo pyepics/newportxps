@@ -1611,6 +1611,11 @@ class XPS:
     def MultipleAxesPVTVerification (self, socketId, GroupName, TrajectoryFileName):
         command = 'MultipleAxesPVTVerification(' + GroupName + ',' + TrajectoryFileName + ')'
         return self.Send(socketId, command)
+    
+    # MultipleAxesPTVerification :  Multiple axes PT trajectory verification
+    def MultipleAxesPTVerification (self, socketId, GroupName, TrajectoryFileName):
+        command = 'MultipleAxesPTVerification(' + GroupName + ',' + TrajectoryFileName + ')'
+        return self.Send(socketId, command)
 
     # MultipleAxesPVTVerificationResultGet :  Multiple axes PVT trajectory verification result get
     def MultipleAxesPVTVerificationResultGet (self, socketId, PositionerName):
@@ -1630,6 +1635,11 @@ class XPS:
     # MultipleAxesPVTExecution :  Multiple axes PVT trajectory execution
     def MultipleAxesPVTExecution (self, socketId, GroupName, TrajectoryFileName, ExecutionNumber):
         command = 'MultipleAxesPVTExecution(' + GroupName + ',' + TrajectoryFileName + ',' + str(ExecutionNumber) + ')'
+        return self.Send(socketId, command)
+    
+    # MultipleAxesPTExecution :  Multiple axes PT trajectory execution
+    def MultipleAxesPTExecution (self, socketId, GroupName, TrajectoryFileName, ExecutionNumber):
+        command = 'MultipleAxesPTExecution(' + GroupName + ',' + TrajectoryFileName + ',' + str(ExecutionNumber) + ')'
         return self.Send(socketId, command)
 
     # MultipleAxesPVTParametersGet :  Multiple axes PVT trajectory get parameters
