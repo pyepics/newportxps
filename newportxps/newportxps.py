@@ -474,8 +474,12 @@ class NewportXPS:
         initialize all groups, no homing
         """
         for g in self.groups:
-            self.initialize_group(group=g)
-
+            try:
+                self.initialize_group(group=g)
+            except XPSException:
+                print(f"Warning: could not initialize '{g}' (already initialized?)")
+                
+                
     def home_allgroups(self, with_encoder=True, home=False):
         """
         home all groups
