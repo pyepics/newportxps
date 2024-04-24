@@ -36,10 +36,7 @@ class NewportXPS:
                  username='Administrator', password='Administrator',
                  port=5001, timeout=10, extra_triggers=0,
                  outputs=('CurrentPosition', 'SetpointPosition')):
-        try:
-            host = socket.gethostbyname(host)
-        except:
-            print(f"Warning: could not resolve hostname for '{host}'")
+
         self.host = host
         self.port = port
         self.username = username
@@ -70,7 +67,7 @@ class NewportXPS:
             self.set_trajectory_group(group)
 
     def __repr__(self):
-        return 'NewportXPS(host=%s, port=%d)' % (self.host, self.port)
+        return f"NewportXPS(host='{self.host}', port={self.port})"
 
     @withConnectedXPS
     def status_report(self):
