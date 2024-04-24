@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import ftplib
 from io import BytesIO
 from .utils import str2bytes, bytes2str, ENCODING
@@ -36,19 +35,19 @@ class FTPBaseWrapper(object):
         self._conn.cwd(remotedir)
 
     def connect(self, host=None, username=None, password=None):
-        raise NotImplemented
+        raise NotImplementedError
 
     def save(self, remotefile, localfile):
         "save remote file to local file"
-        raise NotImplemented
+        raise NotImplementedError
 
     def getlines(self, remotefile):
         "read text of remote file"
-        raise NotImplemented
+        raise NotImplementedError
 
     def put(self, text, remotefile):
         "put text to remote file"
-        raise NotImplemented
+        raise NotImplementedError
 
 
 class SFTPWrapper(FTPBaseWrapper):
@@ -122,7 +121,7 @@ class FTPWrapper(FTPBaseWrapper):
     def save(self, remotefile, localfile):
         "save remote file to local file"
         output = []
-        x = self._conn.retrbinary('RETR %s' % remotefile, output.append)
+        self._conn.retrbinary(f'RETR {remotefile}', output.append)
         with open(localfile, 'w', encoding=ENCODING) as fout:
             fout.write(''.join([bytes2str(s) for s in output]))
 
