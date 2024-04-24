@@ -37,12 +37,9 @@ class NewportXPS:
                  port=5001, timeout=10, extra_triggers=0,
                  outputs=('CurrentPosition', 'SetpointPosition')):
         try:
-            socket.setdefaulttimeout(5.0)
             host = socket.gethostbyname(host)
         except:
-            raise ValueError('Could not resolve XPS name %s' % host)
-        finally:
-            socket.setdefaulttimeout(None)
+            print(f"Warning: could not resolve hostname for '{host}'")
         self.host = host
         self.port = port
         self.username = username
