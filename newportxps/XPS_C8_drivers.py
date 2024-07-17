@@ -14,6 +14,7 @@
 
 import sys
 import socket
+from collections import defaultdict
 
 from .utils import bytes2str, str2bytes
 
@@ -30,14 +31,11 @@ class XPS:
 
     # Global variables
     __sockets = {}
-    __usedSockets = {}
+    __usedSockets = defaultdict(int)
     __nbSockets = 0
 
     # Initialization Function
     def __init__ (self):
-        XPS.__nbSockets = 0
-        for socketId in range(self.MAX_NB_SOCKETS):
-            XPS.__usedSockets[socketId] = 0
         self.errorcodes = {}
 
     def withValidSocket(fcn):
