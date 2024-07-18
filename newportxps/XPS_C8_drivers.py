@@ -15,6 +15,7 @@
 import sys
 import socket
 from collections import defaultdict
+from typing import Callable, Dict, Union, List
 
 from .utils import bytes2str, str2bytes
 
@@ -24,6 +25,36 @@ class XPSException(Exception):
         self.msg = msg
     def __str__(self):
         return str(self.msg)
+
+
+class XPSOutputs:
+    _PARSERS: Dict[str, Callable[[str], Union[bool, str, float, int]]] = {
+        'bool': bool,
+        'char': lambda x: x,
+        'double': float,
+        'int': int,
+        'short': int,
+        'unsigned short': int,
+    }
+
+    def __init__(self, *output_parameter_types: str):
+        self.output_parameter_types = output_parameter_types
+        for p in output_parameter_types:
+            assert p in self._PARSERS, f'Unknown output parameter type {p}'
+
+    def __str__(self):
+        return ','.join(f'{c_type} *' for c_type in self.output_parameter_types)
+
+    def parse(self, error: int, response: str):
+        if error != 0:
+            return [error, response]
+
+        response_parts = response.split(',', len(self.output_parameter_types))
+        parsed_response: List[Union[bool, str, float, int]] = [error]
+        for i, c_type in enumerate(self.output_parameter_types):
+            parsed_response.append(self._PARSERS[c_type](response_parts[i]))
+        return parsed_response
+
 
 class XPS:
     # Defines
@@ -58,20 +89,20 @@ class XPS:
     @withValidSocket
     def __sendAndReceive (self, socketId, command):
         # print("SEND REC ", command, type(command))
+        suffix = ',EndOfAPI'
         try:
             XPS.__sockets[socketId].send(str2bytes(command))
             ret = bytes2str(XPS.__sockets[socketId].recv(1024))
-            while (ret.find(',EndOfAPI') == -1):
+            while (ret.find(suffix) == -1):
                 ret += bytes2str(XPS.__sockets[socketId].recv(1024))
         except socket.timeout:
-            return [-2, '']
+            return -2, ''
         except socket.error as err: #  (errNb, errString):
             print( 'Socket error : ', err.errno, err)
-            return [-2, '']
+            return -2, ''
 
-        for i in range(len(ret)):
-            if (ret[i] == ','):
-                return [int(ret[0:i]), ret[i+1:-9]]
+        error, rest = ret[:-len(suffix)].split(',', 1)
+        return int(error), rest
 
     def Send(self, socketId=None, cmd=None, check=False):
         """send and receive command cmd from socketId
@@ -140,49 +171,29 @@ class XPS:
 
     # ControllerMotionKernelTimeLoadGet :  Get controller motion kernel time load
     def ControllerMotionKernelTimeLoadGet(self, socketId=None):
-        command = 'ControllerMotionKernelTimeLoadGet(double *,double *,double *,double *)'
+        outputs = XPSOutputs("double", 'double', 'double', 'double')
+        command = f'ControllerMotionKernelTimeLoadGet({outputs})'
         error, returnedString = self.Send(socketId=socketId, cmd=command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # ControllerStatusGet :  Read controller current status
     def ControllerStatusGet(self, socketId=None):
+        outputs = XPSOutputs('int')
         error, returnedString = self.Send(socketId=socketId,
-                                          cmd='ControllerStatusGet(int *)', check=True)
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+                                          cmd=f'ControllerStatusGet({outputs})', check=True)
+        return outputs.parse(error, returnedString)
 
     # ControllerStatusStringGet :  Return the controller status string corresponding to the controller status code
     def ControllerStatusStringGet(self, socketId, ControllerStatusCode):
         command = 'ControllerStatusStringGet(%s, char *)' % str(ControllerStatusCode)
         return self.Send(socketId, command)
 
-
     # ElapsedTimeGet :  Return elapsed time from controller power on
     def ElapsedTimeGet(self, socketId=None):
-        command = 'ElapsedTimeGet(double *)'
-        [error, returnedString] = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-
-        return retList
-
+        outputs = XPSOutputs('double')
+        command = f'ElapsedTimeGet({outputs})'
+        error, returnedString = self.Send(socketId, command)
+        return outputs.parse(error, returnedString)
 
     # ErrorStringGet :  Return the error string corresponding to the error code
     def ErrorStringGet(self, socketId, ErrorCode):
@@ -214,17 +225,10 @@ class XPS:
 
     # TimerGet :  Get a timer
     def TimerGet (self, socketId, TimerName):
-        command = 'TimerGet(' + TimerName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'TimerGet({TimerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-
-        return retList
+        return outputs.parse(error, returnedString)
 
     # TimerSet :  Set a timer
     def TimerSet (self, socketId, TimerName, FrequencyTicks):
@@ -304,16 +308,10 @@ class XPS:
 
     # EventExtendedStart :  Launch the last event and action configuration and return an ID
     def EventExtendedStart (self, socketId):
-        command = 'EventExtendedStart(int *)'
+        outputs = XPSOutputs('int')
+        command = f'EventExtendedStart({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # EventExtendedAllGet :  Read all event and action configurations
     def EventExtendedAllGet (self, socketId):
@@ -347,18 +345,10 @@ class XPS:
 
     # GatheringCurrentNumberGet :  Maximum number of samples and current number during acquisition
     def GatheringCurrentNumberGet (self, socketId):
-        command = 'GatheringCurrentNumberGet(int *,int *)'
+        outputs = XPSOutputs('int', 'int')
+        command = f'GatheringCurrentNumberGet({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # GatheringStopAndSave :  Stop acquisition and save data
     def GatheringStopAndSave (self, socketId):
@@ -413,19 +403,10 @@ class XPS:
 
     # GatheringExternalCurrentNumberGet :  Maximum number of samples and current number during acquisition
     def GatheringExternalCurrentNumberGet (self, socketId):
-        command = 'GatheringExternalCurrentNumberGet(int *,int *)'
+        outputs = XPSOutputs('int', 'int')
+        command = f'GatheringExternalCurrentNumberGet({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GatheringExternalDataGet :  Get a data line from external gathering buffer
     def GatheringExternalDataGet (self, socketId, IndexPoint):
@@ -446,16 +427,10 @@ class XPS:
 
     # DoubleGlobalArrayGet :  Get double global array value
     def DoubleGlobalArrayGet (self, socketId, Number):
-        command = 'DoubleGlobalArrayGet(' + str(Number) + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'DoubleGlobalArrayGet({Number},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # DoubleGlobalArraySet :  Set double global array value
     def DoubleGlobalArraySet (self, socketId, Number, DoubleValue):
@@ -464,6 +439,7 @@ class XPS:
 
     # GPIOAnalogGet :  Read analog input or analog output for one or few input
     def GPIOAnalogGet (self, socketId, GPIOName):
+        outputs = XPSOutputs(*(['double'] * len(GPIOName)))
         command = 'GPIOAnalogGet('
         for i in range(len(GPIOName)):
             if (i > 0):
@@ -472,17 +448,7 @@ class XPS:
         command += ')'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(len(GPIOName)):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GPIOAnalogSet :  Set analog output for one or few output
     def GPIOAnalogSet (self, socketId, GPIOName, AnalogOutputValue):
@@ -494,9 +460,9 @@ class XPS:
         command += ')'
         return self.Send(socketId, command)
 
-
     # GPIOAnalogGainGet :  Read analog input gain (1, 2, 4 or 8) for one or few input
     def GPIOAnalogGainGet (self, socketId, GPIOName):
+        outputs = XPSOutputs(*(['int'] * len(GPIOName)))
         command = 'GPIOAnalogGainGet('
         for i in range(len(GPIOName)):
             if (i > 0):
@@ -505,17 +471,7 @@ class XPS:
         command += ')'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(len(GPIOName)):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GPIOAnalogGainSet :  Set analog input gain (1, 2, 4 or 8) for one or few input
     def GPIOAnalogGainSet (self, socketId, GPIOName, AnalogInputGainValue):
@@ -530,17 +486,10 @@ class XPS:
 
     # GPIODigitalGet :  Read digital output or digital input
     def GPIODigitalGet (self, socketId, GPIOName):
-
-        command = 'GPIODigitalGet(' + GPIOName + ',unsigned short *)'
+        outputs = XPSOutputs('unsigned short')
+        command = f'GPIODigitalGet({GPIOName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
 
     # GPIODigitalSet :  Set Digital Output for one or few output TTL
@@ -550,24 +499,11 @@ class XPS:
 
     # GroupAccelerationSetpointGet :  Return setpoint accelerations
     def GroupAccelerationSetpointGet (self, socketId, GroupName, nbElement):
-        command = 'GroupAccelerationSetpointGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupAccelerationSetpointGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # GroupAnalogTrackingModeEnable :  Enable Analog Tracking mode on selected group
     def GroupAnalogTrackingModeEnable (self, socketId, GroupName, Type):
@@ -581,46 +517,18 @@ class XPS:
 
     # GroupCorrectorOutputGet :  Return corrector outputs
     def GroupCorrectorOutputGet (self, socketId, GroupName, nbElement):
-        command = 'GroupCorrectorOutputGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupCorrectorOutputGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupCurrentFollowingErrorGet :  Return current following errors
     def GroupCurrentFollowingErrorGet (self, socketId, GroupName, nbElement):
-        command = 'GroupCurrentFollowingErrorGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupCurrentFollowingErrorGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupHomeSearch :  Start home search sequence
     def GroupHomeSearch (self, socketId, GroupName):
@@ -656,47 +564,19 @@ class XPS:
 
     # GroupJogParametersGet :  Get Jog parameters on selected group
     def GroupJogParametersGet (self, socketId, GroupName, nbElement):
-        command = 'GroupJogParametersGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *' + ',' + 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * 2 * nbElement))
+        command = f'GroupJogParametersGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement*2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # GroupJogCurrentGet :  Get Jog current on selected group
     def GroupJogCurrentGet (self, socketId, GroupName, nbElement):
-        command = 'GroupJogCurrentGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *' + ',' + 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * 2 * nbElement))
+        command = f'GroupJogCurrentGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement*2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupJogModeEnable :  Enable Jog mode on selected group
     def GroupJogModeEnable (self, socketId, GroupName):
@@ -746,99 +626,42 @@ class XPS:
 
     # GroupPositionCorrectedProfilerGet :  Return corrected profiler positions
     def GroupPositionCorrectedProfilerGet (self, socketId, GroupName, PositionX, PositionY):
-        command = 'GroupPositionCorrectedProfilerGet(' + GroupName + ',' + str(PositionX) + ',' + str(PositionY) + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'GroupPositionCorrectedProfilerGet({GroupName},{PositionX},{PositionY},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupPositionCurrentGet :  Return current positions
     def GroupPositionCurrentGet (self, socketId, GroupName, nbElement):
-        command = 'GroupPositionCurrentGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupPositionCurrentGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # GroupPositionPCORawEncoderGet :  Return PCO raw encoder positions
     def GroupPositionPCORawEncoderGet (self, socketId, GroupName, PositionX, PositionY):
-        command = 'GroupPositionPCORawEncoderGet(' + GroupName + ',' + str(PositionX) + ',' + str(PositionY) + ',double *,double *)'
-        error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
+        outputs = XPSOutputs('double', 'double')
+        command = f'GroupPositionPCORawEncoderGet({GroupName},{PositionX},{PositionY},{outputs})'
 
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        error, returnedString = self.Send(socketId, command)
+        return outputs.parse(error, returnedString)
 
     # GroupPositionSetpointGet :  Return setpoint positions
     def GroupPositionSetpointGet (self, socketId, GroupName, nbElement):
-        command = 'GroupPositionSetpointGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupPositionSetpointGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupPositionTargetGet :  Return target positions
     def GroupPositionTargetGet (self, socketId, GroupName, nbElement):
-        command = 'GroupPositionTargetGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupPositionTargetGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupReferencingActionExecute :  Execute an action in referencing mode
     def GroupReferencingActionExecute (self, socketId, PositionerName, ReferencingAction, ReferencingSensor, ReferencingParameter):
@@ -855,17 +678,10 @@ class XPS:
 
     # GroupStatusGet :  Return group status
     def GroupStatusGet (self, socketId, GroupName):
-        command = 'GroupStatusGet(' + GroupName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'GroupStatusGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupStatusStringGet :  Return the group status string corresponding to the group status code
     def GroupStatusStringGet (self, socketId, GroupStatusCode):
@@ -873,25 +689,11 @@ class XPS:
 
     # GroupVelocityCurrentGet :  Return current velocities
     def GroupVelocityCurrentGet (self, socketId, GroupName, nbElement):
-        command = 'GroupVelocityCurrentGet(' + GroupName + ','
-        for i in range(nbElement):
-            if (i > 0):
-                command += ','
-            command += 'double *'
-        command += ')'
+        outputs = XPSOutputs(*(['double'] * nbElement))
+        command = f'GroupVelocityCurrentGet({GroupName},{outputs})'
 
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(nbElement):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # KillAll :  Put all groups in 'Not initialized' state
     def KillAll (self, socketId):
@@ -899,18 +701,10 @@ class XPS:
 
     # PositionerAnalogTrackingPositionParametersGet :  Read dynamic parameters for one axe of a group for a future analog tracking position
     def PositionerAnalogTrackingPositionParametersGet (self, socketId, PositionerName):
-        command = 'PositionerAnalogTrackingPositionParametersGet(' + PositionerName + ',char *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'double', 'double')
+        command = f'PositionerAnalogTrackingPositionParametersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerAnalogTrackingPositionParametersSet :  Update dynamic parameters for one axe of a group for a future analog tracking position
     def PositionerAnalogTrackingPositionParametersSet (self, socketId, PositionerName, GPIOName, Offset, Scale, Velocity, Acceleration):
@@ -919,18 +713,10 @@ class XPS:
 
     # PositionerAnalogTrackingVelocityParametersGet :  Read dynamic parameters for one axe of a group for a future analog tracking velocity
     def PositionerAnalogTrackingVelocityParametersGet (self, socketId, PositionerName):
-        command = 'PositionerAnalogTrackingVelocityParametersGet(' + PositionerName + ',char *,double *,double *,double *,int *,double *,double *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'double', 'int', 'double', 'double')
+        command = f'PositionerAnalogTrackingVelocityParametersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(6):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerAnalogTrackingVelocityParametersSet :  Update dynamic parameters for one axe of a group for a future analog tracking velocity
     def PositionerAnalogTrackingVelocityParametersSet (self, socketId, PositionerName, GPIOName, Offset, Scale, DeadBandThreshold, Order, Velocity, Acceleration):
@@ -939,18 +725,10 @@ class XPS:
 
     # PositionerBacklashGet :  Read backlash value and status
     def PositionerBacklashGet (self, socketId, PositionerName):
-        command = 'PositionerBacklashGet(' + PositionerName + ',double *,char *)'
+        outputs = XPSOutputs('double', 'char')
+        command = f'PositionerBacklashGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerBacklashSet :  Set backlash value
     def PositionerBacklashSet (self, socketId, PositionerName, BacklashValue):
@@ -972,18 +750,10 @@ class XPS:
 
     # PositionerCorrectorNotchFiltersGet :  Read filters parameters
     def PositionerCorrectorNotchFiltersGet (self, socketId, PositionerName):
-        command = 'PositionerCorrectorNotchFiltersGet(' + PositionerName + ',double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double', 'double', 'double')
+        command = f'PositionerCorrectorNotchFiltersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(6):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerCorrectorPIDFFAccelerationSet :  Update corrector parameters
     def PositionerCorrectorPIDFFAccelerationSet (self, socketId, PositionerName, ClosedLoopStatus, KP, KI, KD, KS, IntegrationTime,
@@ -996,19 +766,10 @@ class XPS:
 
     # PositionerCorrectorPIDFFAccelerationGet :  Read corrector parameters
     def PositionerCorrectorPIDFFAccelerationGet (self, socketId, PositionerName):
-        command = 'PositionerCorrectorPIDFFAccelerationGet(' + PositionerName + ',bool *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('bool', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double')
+        command = f'PositionerCorrectorPIDFFAccelerationGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(12):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # PositionerCorrectorPIDFFVelocitySet :  Update corrector parameters
     def PositionerCorrectorPIDFFVelocitySet (self, socketId, PositionerName, ClosedLoopStatus, KP, KI, KD, KS, IntegrationTime, DerivativeFilterCutOffFrequency, GKP, GKI, GKD, KForm, FeedForwardGainVelocity):
@@ -1019,18 +780,10 @@ class XPS:
 
     # PositionerCorrectorPIDFFVelocityGet :  Read corrector parameters
     def PositionerCorrectorPIDFFVelocityGet (self, socketId, PositionerName):
-        command = 'PositionerCorrectorPIDFFVelocityGet(' + PositionerName + ',bool *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('bool', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double')
+        command = f'PositionerCorrectorPIDFFVelocityGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(12):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerCorrectorPIDDualFFVoltageSet :  Update corrector parameters
     def PositionerCorrectorPIDDualFFVoltageSet (self, socketId, PositionerName, ClosedLoopStatus, KP, KI, KD, KS, IntegrationTime, DerivativeFilterCutOffFrequency, GKP, GKI, GKD, KForm, FeedForwardGainVelocity, FeedForwardGainAcceleration, Friction):
@@ -1041,18 +794,10 @@ class XPS:
 
     # PositionerCorrectorPIDDualFFVoltageGet :  Read corrector parameters
     def PositionerCorrectorPIDDualFFVoltageGet (self, socketId, PositionerName):
-        command = 'PositionerCorrectorPIDDualFFVoltageGet(' + PositionerName + ',bool *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('bool', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double')
+        command = f'PositionerCorrectorPIDDualFFVoltageGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(14):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerCorrectorPIPositionSet :  Update corrector parameters
     def PositionerCorrectorPIPositionSet (self, socketId, PositionerName, ClosedLoopStatus, KP, KI, IntegrationTime):
@@ -1061,18 +806,10 @@ class XPS:
 
     # PositionerCorrectorPIPositionGet :  Read corrector parameters
     def PositionerCorrectorPIPositionGet (self, socketId, PositionerName):
-        command = 'PositionerCorrectorPIPositionGet(' + PositionerName + ',bool *,double *,double *,double *)'
+        outputs = XPSOutputs('bool', 'double', 'double', 'double')
+        command = f'PositionerCorrectorPIPositionGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerCorrectorTypeGet :  Read corrector type
     def PositionerCorrectorTypeGet (self, socketId, PositionerName):
@@ -1080,18 +817,10 @@ class XPS:
 
     # PositionerCurrentVelocityAccelerationFiltersGet :  Get current velocity and acceleration cutoff frequencies
     def PositionerCurrentVelocityAccelerationFiltersGet (self, socketId, PositionerName):
-        command = 'PositionerCurrentVelocityAccelerationFiltersGet(' + PositionerName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'PositionerCurrentVelocityAccelerationFiltersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerCurrentVelocityAccelerationFiltersSet :  Set current velocity and acceleration cutoff frequencies
     def PositionerCurrentVelocityAccelerationFiltersSet (self, socketId, PositionerName, CurrentVelocityCutOffFrequency, CurrentAccelerationCutOffFrequency):
@@ -1100,18 +829,10 @@ class XPS:
 
     # PositionerDriverFiltersGet :  Get driver filters parameters
     def PositionerDriverFiltersGet (self, socketId, PositionerName):
-        command = 'PositionerDriverFiltersGet(' + PositionerName + ',double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double', 'double')
+        command = f'PositionerDriverFiltersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(5):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerDriverFiltersSet :  Set driver filters parameters
     def PositionerDriverFiltersSet (self, socketId, PositionerName, KI, NotchFrequency, NotchBandwidth, NotchGain, LowpassFrequency):
@@ -1120,32 +841,17 @@ class XPS:
 
     # PositionerDriverPositionOffsetsGet :  Get driver stage and gage position offset
     def PositionerDriverPositionOffsetsGet (self, socketId, PositionerName):
-        command = 'PositionerDriverPositionOffsetsGet(' + PositionerName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'PositionerDriverPositionOffsetsGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerDriverStatusGet :  Read positioner driver status
     def PositionerDriverStatusGet (self, socketId, PositionerName):
-        command = 'PositionerDriverStatusGet(' + PositionerName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'PositionerDriverStatusGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # PositionerDriverStatusStringGet :  Return the positioner driver status string corresponding to the positioner error code
     def PositionerDriverStatusStringGet (self, socketId, PositionerDriverStatus):
@@ -1154,59 +860,31 @@ class XPS:
 
     # PositionerEncoderAmplitudeValuesGet :  Read analog interpolated encoder amplitude values
     def PositionerEncoderAmplitudeValuesGet (self, socketId, PositionerName):
-        command = 'PositionerEncoderAmplitudeValuesGet(' + PositionerName + ',double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double')
+        command = f'PositionerEncoderAmplitudeValuesGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerEncoderCalibrationParametersGet :  Read analog interpolated encoder calibration parameters
     def PositionerEncoderCalibrationParametersGet (self, socketId, PositionerName):
-        command = 'PositionerEncoderCalibrationParametersGet(' + PositionerName + ',double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double')
+        command = f'PositionerEncoderCalibrationParametersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerErrorGet :  Read and clear positioner error code
     def PositionerErrorGet (self, socketId, PositionerName):
-        command = 'PositionerErrorGet(' + PositionerName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'PositionerErrorGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerErrorRead :  Read only positioner error code without clear it
     def PositionerErrorRead (self, socketId, PositionerName):
-        command = 'PositionerErrorRead(' + PositionerName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'PositionerErrorRead({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerErrorStringGet :  Return the positioner status string corresponding to the positioner error code
     def PositionerErrorStringGet (self, socketId, PositionerErrorCode):
@@ -1214,18 +892,10 @@ class XPS:
 
     # PositionerExcitationSignalGet :  Read disturbing signal parameters
     def PositionerExcitationSignalGet (self, socketId, PositionerName):
-        command = 'PositionerExcitationSignalGet(' + PositionerName + ',int *,double *,double *,double *)'
+        outputs = XPSOutputs('int', 'double', 'double', 'double')
+        command = f'PositionerExcitationSignalGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerExcitationSignalSet :  Update disturbing signal parameters
     def PositionerExcitationSignalSet (self, socketId, PositionerName, Mode, Frequency, Amplitude, Time):
@@ -1234,29 +904,17 @@ class XPS:
 
     # PositionerExternalLatchPositionGet :  Read external latch position
     def PositionerExternalLatchPositionGet (self, socketId, PositionerName):
-        command = 'PositionerExternalLatchPositionGet(' + PositionerName + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'PositionerExternalLatchPositionGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerHardwareStatusGet :  Read positioner hardware status
     def PositionerHardwareStatusGet (self, socketId, PositionerName):
-        command = 'PositionerHardwareStatusGet(' + PositionerName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'PositionerHardwareStatusGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerHardwareStatusStringGet :  Return the positioner hardware status string corresponding to the positioner error code
     def PositionerHardwareStatusStringGet (self, socketId, PositionerHardwareStatus):
@@ -1264,16 +922,10 @@ class XPS:
 
     # PositionerHardInterpolatorFactorGet :  Get hard interpolator parameters
     def PositionerHardInterpolatorFactorGet (self, socketId, PositionerName):
-        command = 'PositionerHardInterpolatorFactorGet(' + PositionerName + ',int *)'
+        outputs = XPSOutputs('int')
+        command = f'PositionerHardInterpolatorFactorGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerHardInterpolatorFactorSet :  Set hard interpolator parameters
     def PositionerHardInterpolatorFactorSet (self, socketId, PositionerName, InterpolationFactor):
@@ -1282,33 +934,17 @@ class XPS:
 
     # PositionerMaximumVelocityAndAccelerationGet :  Return maximum velocity and acceleration of the positioner
     def PositionerMaximumVelocityAndAccelerationGet (self, socketId, PositionerName):
-        command = 'PositionerMaximumVelocityAndAccelerationGet(' + PositionerName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'PositionerMaximumVelocityAndAccelerationGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerMotionDoneGet :  Read motion done parameters
     def PositionerMotionDoneGet (self, socketId, PositionerName):
-        command = 'PositionerMotionDoneGet(' + PositionerName + ',double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double', 'double')
+        command = f'PositionerMotionDoneGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(5):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerMotionDoneSet :  Update motion done parameters
     def PositionerMotionDoneSet (self, socketId, PositionerName, PositionWindow, VelocityWindow, CheckingTime, MeanPeriod, TimeOut):
@@ -1322,18 +958,10 @@ class XPS:
 
     # PositionerPositionCompareAquadBWindowedGet :  Read position compare AquadB windowed parameters
     def PositionerPositionCompareAquadBWindowedGet (self, socketId, PositionerName):
-        command = 'PositionerPositionCompareAquadBWindowedGet(' + PositionerName + ',double *,double *,bool *)'
+        outputs = XPSOutputs('double', 'double', 'bool')
+        command = f'PositionerPositionCompareAquadBWindowedGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerPositionCompareAquadBWindowedSet :  Set position compare AquadB windowed parameters
     def PositionerPositionCompareAquadBWindowedSet (self, socketId, PositionerName, MinimumPosition, MaximumPosition):
@@ -1348,25 +976,17 @@ class XPS:
 
     # PositionerPositionCompareAquadBPrescalerGet : Gets PCO AquadB interpolation factor.
     def PositionerPositionCompareAquadBPrescalerGet(self, socketId, PositionerName):
-        command = 'PositionerPositionCompareAquadBPrescalerGet(' + PositionerName + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'PositionerPositionCompareAquadBPrescalerGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
+        return outputs.parse(error, returnedString)
 
     # PositionerPositionCompareGet :  Read position compare parameters
     def PositionerPositionCompareGet (self, socketId, PositionerName):
-        command = 'PositionerPositionCompareGet(' + PositionerName + ',double *,double *,double *,bool *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'bool')
+        command = f'PositionerPositionCompareGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerPositionCompareSet :  Set position compare parameters
     def PositionerPositionCompareSet (self, socketId, PositionerName, MinimumPosition, MaximumPosition, PositionStep):
@@ -1385,18 +1005,10 @@ class XPS:
 
     # PositionerPositionComparePulseParametersGet :  Get position compare PCO pulse parameters
     def PositionerPositionComparePulseParametersGet (self, socketId, PositionerName):
-        command = 'PositionerPositionComparePulseParametersGet(' + PositionerName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'PositionerPositionComparePulseParametersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerPositionComparePulseParametersSet :  Set position compare PCO pulse parameters
     def PositionerPositionComparePulseParametersSet (self, socketId, PositionerName, PCOPulseWidth, EncoderSettlingTime):
@@ -1405,57 +1017,31 @@ class XPS:
 
     # PositionerRawEncoderPositionGet :  Get the raw encoder position
     def PositionerRawEncoderPositionGet (self, socketId, PositionerName, UserEncoderPosition):
-        command = 'PositionerRawEncoderPositionGet(' + PositionerName + ',' + str(UserEncoderPosition) + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'PositionerRawEncoderPositionGet({PositionerName},{UserEncoderPosition},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionersEncoderIndexDifferenceGet :  Return the difference between index of primary axis and secondary axis (only after homesearch)
     def PositionersEncoderIndexDifferenceGet (self, socketId, PositionerName):
-        command = 'PositionersEncoderIndexDifferenceGet(' + PositionerName + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'PositionersEncoderIndexDifferenceGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerSGammaExactVelocityAjustedDisplacementGet :  Return adjusted displacement to get exact velocity
     def PositionerSGammaExactVelocityAjustedDisplacementGet (self, socketId, PositionerName, DesiredDisplacement):
-        command = 'PositionerSGammaExactVelocityAjustedDisplacementGet(' + PositionerName + ',' + str(DesiredDisplacement) + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'PositionerSGammaExactVelocityAjustedDisplacementGet({PositionerName},{DesiredDisplacement},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerSGammaParametersGet :  Read dynamic parameters for one axe of a group for a future displacement
     def PositionerSGammaParametersGet (self, socketId, PositionerName):
-        command = 'PositionerSGammaParametersGet(' + PositionerName + ',double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double')
+        command = f'PositionerSGammaParametersGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerSGammaParametersSet :  Update dynamic parameters for one axe of a group for a future displacement
     def PositionerSGammaParametersSet (self, socketId, PositionerName, Velocity, Acceleration, MinimumTjerkTime, MaximumTjerkTime):
@@ -1464,18 +1050,10 @@ class XPS:
 
     # PositionerSGammaPreviousMotionTimesGet :  Read SettingTime and SettlingTime
     def PositionerSGammaPreviousMotionTimesGet (self, socketId, PositionerName):
-        command = 'PositionerSGammaPreviousMotionTimesGet(' + PositionerName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'PositionerSGammaPreviousMotionTimesGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerStageParameterGet :  Return the stage parameter
     def PositionerStageParameterGet (self, socketId, PositionerName, ParameterName):
@@ -1489,18 +1067,10 @@ class XPS:
 
     # PositionerTimeFlasherGet :  Read time flasher parameters
     def PositionerTimeFlasherGet (self, socketId, PositionerName):
-        command = 'PositionerTimeFlasherGet(' + PositionerName + ',double *,double *,double *,bool *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'bool')
+        command = f'PositionerTimeFlasherGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerTimeFlasherSet :  Set time flasher parameters
     def PositionerTimeFlasherSet (self, socketId, PositionerName, MinimumPosition, MaximumPosition, TimeInterval):
@@ -1517,19 +1087,10 @@ class XPS:
 
     # PositionerUserTravelLimitsGet :  Read UserMinimumTarget and UserMaximumTarget
     def PositionerUserTravelLimitsGet (self, socketId, PositionerName):
-        command = 'PositionerUserTravelLimitsGet(' + PositionerName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'PositionerUserTravelLimitsGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # PositionerUserTravelLimitsSet :  Update UserMinimumTarget and UserMaximumTarget
     def PositionerUserTravelLimitsSet (self, socketId, PositionerName, UserMinimumTarget, UserMaximumTarget):
@@ -1538,18 +1099,10 @@ class XPS:
 
     # PositionerDACOffsetGet :  Get DAC offsets
     def PositionerDACOffsetGet (self, socketId, PositionerName):
-        command = 'PositionerDACOffsetGet(' + PositionerName + ',short *,short *)'
+        outputs = XPSOutputs('short', 'short')
+        command = f'PositionerDACOffsetGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # PositionerDACOffsetSet :  Set DAC offsets
     def PositionerDACOffsetSet (self, socketId, PositionerName, DACOffset1, DACOffset2):
@@ -1558,19 +1111,10 @@ class XPS:
 
     # PositionerDACOffsetDualGet :  Get dual DAC offsets
     def PositionerDACOffsetDualGet (self, socketId, PositionerName):
-        command = 'PositionerDACOffsetDualGet(' + PositionerName + ',short *,short *,short *,short *)'
+        outputs = XPSOutputs('short', 'short', 'short', 'short')
+        command = f'PositionerDACOffsetDualGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # PositionerDACOffsetDualSet :  Set dual DAC offsets
     def PositionerDACOffsetDualSet (self, socketId, PositionerName, PrimaryDACOffset1, PrimaryDACOffset2, SecondaryDACOffset1, SecondaryDACOffset2):
@@ -1579,31 +1123,17 @@ class XPS:
 
     # PositionerCorrectorAutoTuning :  Astrom&Hagglund based auto-tuning
     def PositionerCorrectorAutoTuning (self, socketId, PositionerName, TuningMode):
-        command = 'PositionerCorrectorAutoTuning(' + PositionerName + ',' + str(TuningMode) + ',double *,double *,double *)'
-        return self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        outputs = XPSOutputs('double', 'double', 'double')
+        command = f'PositionerCorrectorAutoTuning({PositionerName},{TuningMode},{outputs})'
+        error, returnedString = self.Send(socketId, command)
+        return outputs.parse(error, returnedString)
 
     # PositionerAccelerationAutoScaling :  Astrom&Hagglund based auto-scaling
     def PositionerAccelerationAutoScaling (self, socketId, PositionerName):
-        command = 'PositionerAccelerationAutoScaling(' + PositionerName + ',double *)'
+        outputs = XPSOutputs('double')
+        command = f'PositionerAccelerationAutoScaling({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # MultipleAxesPVTVerification :  Multiple axes PVT trajectory verification
     def MultipleAxesPVTVerification (self, socketId, GroupName, TrajectoryFileName):
@@ -1617,18 +1147,10 @@ class XPS:
 
     # MultipleAxesPVTVerificationResultGet :  Multiple axes PVT trajectory verification result get
     def MultipleAxesPVTVerificationResultGet (self, socketId, PositionerName):
-        command = 'MultipleAxesPVTVerificationResultGet(' + PositionerName + ',char *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'double', 'double')
+        command = f'MultipleAxesPVTVerificationResultGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # MultipleAxesPVTExecution :  Multiple axes PVT trajectory execution
     def MultipleAxesPVTExecution (self, socketId, GroupName, TrajectoryFileName, ExecutionNumber):
@@ -1642,16 +1164,10 @@ class XPS:
 
     # MultipleAxesPVTParametersGet :  Multiple axes PVT trajectory get parameters
     def MultipleAxesPVTParametersGet (self, socketId, GroupName):
-        command = 'MultipleAxesPVTParametersGet(' + GroupName + ',char *,int *)'
+        outputs = XPSOutputs('char', 'int')
+        command = f'MultipleAxesPVTParametersGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # MultipleAxesPVTPulseOutputSet :  Configure pulse output on trajectory
     def MultipleAxesPVTPulseOutputSet (self, socketId, GroupName, StartElement, EndElement, TimeInterval):
@@ -1660,18 +1176,10 @@ class XPS:
 
     # MultipleAxesPVTPulseOutputGet :  Get pulse output on trajectory configuration
     def MultipleAxesPVTPulseOutputGet (self, socketId, GroupName):
-        command = 'MultipleAxesPVTPulseOutputGet(' + GroupName + ',int *,int *,double *)'
+        outputs = XPSOutputs('int', 'int', 'double')
+        command = f'MultipleAxesPVTPulseOutputGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # SingleAxisSlaveModeEnable :  Enable the slave mode
     def SingleAxisSlaveModeEnable (self, socketId, GroupName):
@@ -1688,16 +1196,10 @@ class XPS:
 
     # SingleAxisSlaveParametersGet :  Get slave parameters
     def SingleAxisSlaveParametersGet (self, socketId, GroupName):
-        command = 'SingleAxisSlaveParametersGet(' + GroupName + ',char *,double *)'
+        outputs = XPSOutputs('char', 'double')
+        command = f'SingleAxisSlaveParametersGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # SpindleSlaveModeEnable :  Enable the slave mode
     def SpindleSlaveModeEnable (self, socketId, GroupName):
@@ -1714,16 +1216,10 @@ class XPS:
 
     # SpindleSlaveParametersGet :  Get slave parameters
     def SpindleSlaveParametersGet (self, socketId, GroupName):
-        command = 'SpindleSlaveParametersGet(' + GroupName + ',char *,double *)'
+        outputs = XPSOutputs('char', 'double')
+        command = f'SpindleSlaveParametersGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-            j += 1
-        retList.append(eval(returnedString[i:i+j]))
-        return retList
+        return outputs.parse(error, returnedString)
 
     # GroupSpinParametersSet :  Modify Spin parameters on selected group and activate the continuous move
     def GroupSpinParametersSet (self, socketId, GroupName, Velocity, Acceleration):
@@ -1732,34 +1228,17 @@ class XPS:
 
     # GroupSpinParametersGet :  Get Spin parameters on selected group
     def GroupSpinParametersGet (self, socketId, GroupName):
-        command = 'GroupSpinParametersGet(' + GroupName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'GroupSpinParametersGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
-
+        return outputs.parse(error, returnedString)
 
     # GroupSpinCurrentGet :  Get Spin current on selected group
     def GroupSpinCurrentGet (self, socketId, GroupName):
-        command = 'GroupSpinCurrentGet(' + GroupName + ',double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'GroupSpinCurrentGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # GroupSpinModeStop :  Stop Spin mode on selected group with specified acceleration
     def GroupSpinModeStop (self, socketId, GroupName, Acceleration):
@@ -1773,39 +1252,22 @@ class XPS:
 
     # XYLineArcVerificationResultGet :  XY trajectory verification result get
     def XYLineArcVerificationResultGet (self, socketId, PositionerName):
-        command = 'XYLineArcVerificationResultGet(' + PositionerName + ',char *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'double', 'double')
+        command = f'XYLineArcVerificationResultGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # XYLineArcExecution :  XY trajectory execution
     def XYLineArcExecution (self, socketId, GroupName, TrajectoryFileName, Velocity, Acceleration, ExecutionNumber):
         command = 'XYLineArcExecution(' + GroupName + ',' + TrajectoryFileName + ',' + str(Velocity) + ',' + str(Acceleration) + ',' + str(ExecutionNumber) + ')'
         return self.Send(socketId, command)
 
-
     # XYLineArcParametersGet :  XY trajectory get parameters
     def XYLineArcParametersGet (self, socketId, GroupName):
-        command = 'XYLineArcParametersGet(' + GroupName + ',char *,double *,double *,int *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'int')
+        command = f'XYLineArcParametersGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # XYLineArcPulseOutputSet :  Configure pulse output on trajectory
     def XYLineArcPulseOutputSet (self, socketId, GroupName, StartLength, EndLength, PathLengthInterval):
@@ -1814,33 +1276,17 @@ class XPS:
 
     # XYLineArcPulseOutputGet :  Get pulse output on trajectory configuration
     def XYLineArcPulseOutputGet (self, socketId, GroupName):
-        command = 'XYLineArcPulseOutputGet(' + GroupName + ',double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double')
+        command = f'XYLineArcPulseOutputGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # XYZGroupPositionCorrectedProfilerGet :  Return corrected profiler positions
     def XYZGroupPositionCorrectedProfilerGet (self, socketId, GroupName, PositionX, PositionY, PositionZ):
-        command = 'XYZGroupPositionCorrectedProfilerGet(' + GroupName + ',' + str(PositionX) + ',' + str(PositionY) + ',' + str(PositionZ) + ',double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double')
+        command = f'XYZGroupPositionCorrectedProfilerGet({GroupName},{PositionX},{PositionY},{PositionZ},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # XYZSplineVerification :  XYZ trajectory verifivation
     def XYZSplineVerification (self, socketId, GroupName, TrajectoryFileName):
@@ -1849,18 +1295,10 @@ class XPS:
 
     # XYZSplineVerificationResultGet :  XYZ trajectory verification result get
     def XYZSplineVerificationResultGet (self, socketId, PositionerName):
-        command = 'XYZSplineVerificationResultGet(' + PositionerName + ',char *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'double', 'double')
+        command = f'XYZSplineVerificationResultGet({PositionerName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(4):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # XYZSplineExecution :  XYZ trajectory execution
     def XYZSplineExecution (self, socketId, GroupName, TrajectoryFileName, Velocity, Acceleration):
@@ -1869,18 +1307,10 @@ class XPS:
 
     # XYZSplineParametersGet :  XYZ trajectory get parameters
     def XYZSplineParametersGet (self, socketId, GroupName):
-        command = 'XYZSplineParametersGet(' + GroupName + ',char *,double *,double *,int *)'
+        outputs = XPSOutputs('char', 'double', 'double', 'int')
+        command = f'XYZSplineParametersGet({GroupName},{outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(3):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # OptionalModuleExecute :  Execute an optional module
     def OptionalModuleExecute (self, socketId, ModuleFileName, TaskName):
@@ -1909,33 +1339,17 @@ class XPS:
 
     # CPUCoreAndBoardSupplyVoltagesGet :  Get power informations
     def CPUCoreAndBoardSupplyVoltagesGet (self, socketId):
-        command = 'CPUCoreAndBoardSupplyVoltagesGet(double *,double *,double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double', 'double', 'double', 'double', 'double')
+        command = f'CPUCoreAndBoardSupplyVoltagesGet({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(8):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # CPUTemperatureAndFanSpeedGet :  Get CPU temperature and fan speed
     def CPUTemperatureAndFanSpeedGet (self, socketId):
-        command = 'CPUTemperatureAndFanSpeedGet(double *,double *)'
+        outputs = XPSOutputs('double', 'double')
+        command = f'CPUTemperatureAndFanSpeedGet({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(2):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # ActionListGet :  Action list
     def ActionListGet (self, socketId):
@@ -1987,7 +1401,10 @@ class XPS:
 
     # HardwareDriverAndStageGet :  Smart hardware
     def HardwareDriverAndStageGet (self, socketId, PlugNumber):
-        return self.Send(socketId, 'HardwareDriverAndStageGet(%s, char *, char *)' % str(PlugNumber))
+        outputs = XPSOutputs('char', 'char')
+        command = f'HardwareDriverAndStageGet({PlugNumber},{outputs})'
+        error, returnedString = self.Send(socketId, command)
+        return outputs.parse(error, returnedString)
 
     # ObjectsListGet :  Group name and positioner name
     def ObjectsListGet (self, socketId):
@@ -2015,33 +1432,17 @@ class XPS:
 
     # GatheringUserDatasGet :  Return user data values
     def GatheringUserDatasGet (self, socketId):
-        command = 'GatheringUserDatasGet(double *,double *,double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double', 'double', 'double', 'double', 'double')
+        command = f'GatheringUserDatasGet({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(8):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # ControllerMotionKernelPeriodMinMaxGet :  Get controller motion kernel min/max periods
     def ControllerMotionKernelPeriodMinMaxGet (self, socketId):
-        command = 'ControllerMotionKernelPeriodMinMaxGet(double *,double *,double *,double *,double *,double *)'
+        outputs = XPSOutputs('double', 'double', 'double', 'double', 'double', 'double')
+        command = f'ControllerMotionKernelPeriodMinMaxGet({outputs})'
         error, returnedString = self.Send(socketId, command)
-        if (error != 0):
-            return [error, returnedString]
-
-        i, j, retList = 0, 0, [error]
-        for paramNb in range(6):
-            while ((i+j) < len(returnedString) and returnedString[i+j] != ','):
-                j += 1
-            retList.append(eval(returnedString[i:i+j]))
-            i, j = i+j+1, 0
-        return retList
+        return outputs.parse(error, returnedString)
 
     # ControllerMotionKernelPeriodMinMaxReset :  Reset controller motion kernel min/max periods
     def ControllerMotionKernelPeriodMinMaxReset (self, socketId):
