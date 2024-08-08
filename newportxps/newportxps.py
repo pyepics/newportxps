@@ -5,6 +5,7 @@ import posixpath
 import sys
 import time
 import socket
+from tempfile import TemporaryFile
 from io import StringIO
 from configparser import  ConfigParser
 import numpy as np
@@ -119,10 +120,7 @@ class NewportXPS:
             self.ftpconn = FTPWrapper(**self.ftpargs)
             if 'XPS-C' in self.firmware_version:
                 self.ftphome = '/Admin'
-        try:
-            self.read_systemini()
-        except:
-            print("Could not read system.ini!!!")
+        self.read_systemini()
 
 
     def check_error(self, err, msg='', with_raise=True):
@@ -169,7 +167,8 @@ class NewportXPS:
         self.stages= {}
         self.groups = {}
         sconf = ConfigParser()
-        sconf.readfp(StringIO(initext))
+        sconf.read_file(StringIO(initext))
+
 
         # read and populate lists of groups first
         for gtype, glist in sconf.items('GROUPS'): # ].items():
@@ -478,8 +477,8 @@ class NewportXPS:
                 self.initialize_group(group=g)
             except XPSException:
                 print(f"Warning: could not initialize '{g}' (already initialized?)")
-                
-                
+
+
     def home_allgroups(self, with_encoder=True, home=False):
         """
         home all groups
