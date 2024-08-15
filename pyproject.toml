@@ -1,20 +1,28 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "newportxps/version.py"
+version_scheme = "post-release"
+
+[tool.setuptools.packages.find]
+include = ["newportxps"]
 
 [project]
 name = "newportxps"
-version = "0.3.0"
+dynamic = ["version"]
 authors = [
     {name="Matthew Newville", email="newville@cars.uchicago.edu"},
 ]
+
+dependencies = ['pysftp']
 description = "Python interface to Newport XPS motion controllers"
 readme = "README.md"
 requires-python = ">=3.8"
 keywords = ["motion control", "data collection"]
 
 license = {text = "BSD License"}
-dependencies = ['pysftp']
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -43,3 +51,5 @@ classifiers = [
 ]
 
 
+[project.urls]
+Homepage = "https://github.com/pyepics/newportxps/"
