@@ -1154,16 +1154,6 @@ class NewportXPS:
 
         self._xps.GroupMoveRelative(self._sid, self.traj_group, ramps)
 
-        # self.gather_outputs = []
-        ##  gather_titles = []
-
-        # for positioner in self.traj_positioners:
-        #     for out in self.gather_outputs:
-        #         self.gather_outputs.append('%s.%s.%s' % (self.traj_group, positioner, out))
-        #        gather_titles.append('%s.%s' % (positioner, out))
-        ## self.gather_titles = "%s\n#%s\n" % (xps_config['GATHER TITLES'],
-        ##                                     "  ".join(gather_titles))
-
         outputs = []
         for out in self.gather_outputs:
             for i, ax in enumerate(traj['axes']):
