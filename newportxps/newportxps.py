@@ -1,11 +1,9 @@
  #!/usr/bin/env python
 
-import os
 import posixpath
 import sys
 import time
 import socket
-from tempfile import TemporaryFile
 from io import StringIO
 from configparser import  ConfigParser
 import numpy as np
@@ -350,18 +348,29 @@ class NewportXPS:
 
         params = params[1:]
         params[0] = closedloopstatus
-        if kp is not None:      params[1] = kp
-        if ki is not None:      params[2] = ki
-        if kd is not None:      params[3] = kd
-        if ks is not None:      params[4] = ks
-        if inttime is not None: params[5] = inttime
-        if dfilter is not None: params[6] = dfilter
-        if gkp is not None:     params[7] = gkp
-        if gki is not None:     params[8] = gki
-        if gkd is not None:     params[9] = gkd
-        if kform is not None:   params[10] = kform
-        if ffgain is not None:  params[11] = ffgain
-        ret = self._xps.PositionerCorrectorPIDFFVelocitySet(self._sid, stage, *params)
+        if kp is not None:
+            params[1] = kp
+        if ki is not None:
+            params[2] = ki
+        if kd is not None:
+            params[3] = kd
+        if ks is not None:
+            params[4] = ks
+        if inttime is not None:
+            params[5] = inttime
+        if dfilter is not None:
+            params[6] = dfilter
+        if gkp is not None:
+            params[7] = gkp
+        if gki is not None:
+            params[8] = gki
+        if gkd is not None:
+            params[9] = gkd
+        if kform is not None:
+            params[10] = kform
+        if ffgain is not None:
+            params[11] = ffgain
+        self._xps.PositionerCorrectorPIDFFVelocitySet(self._sid, stage, *params)
 
     @withConnectedXPS
     def get_tuning(self, stage):
@@ -563,7 +572,8 @@ class NewportXPS:
         """
         out = {}
         for stage in self.stages:
-            if stage in ('', None): continue
+            if stage in ('', None):
+                continue
             err, stat = self._xps.PositionerHardwareStatusGet(self._sid, stage)
             self.check_error(err, msg="Pos HardwareStatus '%s'" % (stage))
 
@@ -579,7 +589,8 @@ class NewportXPS:
         """
         out = {}
         for stage in self.stages:
-            if stage in ('', None): continue
+            if stage in ('', None):
+                continue
             err, stat = self._xps.PositionerErrorGet(self._sid, stage)
             self.check_error(err, msg="Pos Error '%s'" % (stage))
 
@@ -810,7 +821,6 @@ class NewportXPS:
             print(self.linear_template % back)
 
         ret = True
-
         if upload:
             ret = False
             try:
@@ -844,7 +854,7 @@ class NewportXPS:
             for i, ax in enumerate(traj['axes']):
                 outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
 
-        end_segment = traj['nsegments'] # - 1 + self.extra_triggers
+        end_segment = traj['nsegments']
         self.nsegments = end_segment
 
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
@@ -1115,11 +1125,8 @@ class NewportXPS:
         for ind, positioner in enumerate(self.traj_positioners):
             self.trajectories[name][positioner + 'ramp'] = ramp[ind]
 
-        ret = False
         try:
             self.upload_trajectory(name + '.trj', trajectory_str)
-            ret = True
-            # print('Trajectory File uploaded.')
         except:
             print('Failed to upload trajectory file')
 
@@ -1163,31 +1170,33 @@ class NewportXPS:
                 outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
                 # move_kws[ax] = float(traj['start'][i])
 
-        end_segment = traj['nsegments'] - 1 + self.extra_triggers
-        # self.move_group(self.traj_group, **move_kws)
         self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
 
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
 
-        # print("step_number", step_number)
-        ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
-                                                      2, step_number + 1, dtime)
-        ret = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
+        err, ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
+                                                           2, step_number + 1, dtime)
+        self.check_error(err, msg="MultipleAxesPVTPulseOutputSet", with_raise=False)
+
+        err, ret = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
+        self.check_error(err, msg="MultipleAxesPVTVerification", with_raise=False)
 
         buffer = ('Always', self.traj_group + '.PVT.TrajectoryPulse')
-        o = self._xps.EventExtendedConfigurationTriggerSet(self._sid, buffer,
-                                                          ('0', '0'), ('0', '0'),
-                                                          ('0', '0'), ('0', '0'))
+        err, ret = self._xps.EventExtendedConfigurationTriggerSet(self._sid, buffer,
+                                                                  ('0', '0'), ('0', '0'),
+                                                                  ('0', '0'), ('0', '0'))
+        self.check_error(err, msg="EventExtendedConfigurationTriggerSet", with_raise=False)
 
-        o = self._xps.EventExtendedConfigurationActionSet(self._sid, ('GatheringOneData',),
-                                                         ('',), ('',), ('',), ('',))
+        err, ret = self._xps.EventExtendedConfigurationActionSet(self._sid, ('GatheringOneData',),
+                                                                 ('',), ('',), ('',), ('',))
+        self.check_error(err, msg="EventExtendedConfigurationActionSet", with_raise=False)
 
         eventID, m = self._xps.EventExtendedStart(self._sid)
 
-        ret = self._xps.MultipleAxesPVTExecution(self._sid, self.traj_group, traj_file, 1)
-        o = self._xps.EventExtendedRemove(self._sid, eventID)
-        o = self._xps.GatheringStop(self._sid)
+        self._xps.MultipleAxesPVTExecution(self._sid, self.traj_group, traj_file, 1)
+        self._xps.EventExtendedRemove(self._sid, eventID)
+        self._xps.GatheringStop(self._sid)
 
         npulses = 0
         if save:
