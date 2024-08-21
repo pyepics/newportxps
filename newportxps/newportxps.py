@@ -4,7 +4,7 @@ import posixpath
 import sys
 import time
 import socket
-from io import StringIO
+from copy import deepcopy
 from configparser import  ConfigParser
 import numpy as np
 
@@ -165,8 +165,7 @@ class NewportXPS:
         self.stages= {}
         self.groups = {}
         sconf = ConfigParser()
-        sconf.read_file(StringIO(initext))
-
+        sconf.read_string(initext)
 
         # read and populate lists of groups first
         for gtype, glist in sconf.items('GROUPS'): # ].items():
@@ -832,6 +831,153 @@ class NewportXPS:
             except:
                 raise ValueError("error uploading trajectory")
         return ret
+
+    @withConnectedXPS
+    def define_array_trajectory(self, positions, dtime=1.0, max_accels=None,
+                                upload=True, name='array', verbose=True):
+        """define a PVT trajectory for the trajectory group from a dictionary of
+        position arrays for each positioner in the trajectory group.
+
+        Positioners that are not included in the positions dict will not be moved.
+
+        Arguments
+        ---------
+        positions:  dict of {PosName: np.ndarray} for each positioner to move
+        dtime:      float, time per segment
+        max_accels: dict of {PosName: max_acceleration} to use.
+        name:       name of trajectory (file will be f"{name}.trj")
+        upload:     bool, whether to upload trajectory
+
+        Returns:
+        -------
+        dict with information about trajcetory.  This will include values for
+             pvt+buff:  full text of trajectory buffer
+             start: dict of starting values (backed up from first point so that
+                    positioner can be accelerated to the desired velocity for the
+                    second trajectory segment)
+             npulses: number of expected pulses.
+
+        Notes:
+        ------
+        1. The np.ndarray for each positioner must be the same length, and will be
+           used as midpoints between trigger events.
+        2. For ndarrays of lenght N, the trajectory will have N+1 segments: one
+           to ramp up to velocity to approach the first point, and the last to
+           decelerate to zero velocity.
+
+        """
+        tgroup = self.traj_group
+        if tgroup is None:
+            print("Must define a trajectory group first!")
+            return
+
+        all_axes = [a for a in self.groups[tgroup]['positioners']]
+
+        pdat = {}
+        input_ok = True
+        npts = None
+        for key, value in positions.items():
+            pname = key[:]
+
+            if key.startswith(tgroup):
+                pname = key[len(tgroup)+1:]
+            if pname not in all_axes:
+                print(f"Unknown positioner given: {pname}")
+                input_ok = False
+            if npts is None:
+                npts = len(value)
+            elif npts != len(value):
+                print(f"incorrect array length for {pname}")
+                input_ok = False
+
+            if isinstance(value, np.ndarray):
+                positions[key] = value.astype(np.float64).tolist()
+            else:
+                positions[key] = [float(x) for x in value]
+
+        if not input_ok:
+            return
+
+        npulses  = npts+1
+        dtime = float(abs(dtime))
+        times = np.ones(npulses+1)*dtime
+
+        if max_accels is None:
+            max_accels = {}
+        pos = {}
+        velo = {}
+        accel = {}
+        start = {}
+        for axes in all_axes:
+            stage = f'{tgroup}.{axes}'
+            maxv = self.stages[stage]['max_velo']
+            maxa = self.stages[stage]['max_accel']
+            if axes in max_accels:
+                maxa = min(max_accels[axes], maxa)
+            if axes in positions:
+                upos = positions[axes]
+                # mid are the trajectory trigger points, the
+                # mid points between the desired positions
+                mid = [3*upos[0]-2*upos[1], 2*upos[0] - upos[1]]
+                mid.extend(upos)
+                mid.extend([2*upos[-1]-upos[-2], 3*upos[-1]-2*upos[-2]])
+                mid = np.array(mid)
+                pos[axes] = 0.5*(mid[1:] + mid[:-1])
+
+                # adjust first segment velocity to half max accel
+                p0, p1, p2 = pos[axes][0], pos[axes][1], pos[axes][2]
+                v0 = (p1-p0)/dtime
+                v1 = (p2-p1)/dtime
+                a0 = (v1-v0)/dtime
+                start[axes] = p1 - (p1-p0)*dtime*max(v0, 0.5*maxv)/max(a0, 0.5*maxa)
+
+                pos[axes] = pos[axes][1:] - start[axes]
+                velo[axes] = np.gradient(pos[axes])/times
+                velo[axes][-1] = 0.0
+                accel[axes] = np.gradient(velo[axes])/times
+
+                if (max(abs(velo[axes])) > maxv):
+                    errmsg = f"max velocity {maxv} violated for {axes}"
+                    print(axes, velo[axes])
+                    raise ValueError(errmsg)
+                if (max(abs(accel[axes])) > maxa):
+                    errmsg = f"max acceleration {maxa} violated for {axes}"
+                    print(axes, accel[axes])
+                    raise ValueError(errmsg)
+
+            else:
+                start[axes] = None
+                pos[axes] = np.zeros(npulses+1, dtype=np.float64)
+                velo[axes] = np.zeros(npulses+1, dtype=np.float64)
+                accel[axes] = np.zeros(npulses+1, dtype=np.float64)
+
+        traj = {'axes': all_axes,
+                'start': start, 'pixeltime': dtime,
+                'npulses': npulses, 'nsegments': npulses+1,
+                'uploaded': False}
+
+        buff = []
+        for n in range(npulses+1):
+            line = [f"{dtime:.8f}"]
+            for axes in all_axes:
+                p, v = pos[axes][n], velo[axes][n]
+                line.extend([f"{p:.8f}", f"{v:.8f}"])
+            buff.append(', '.join(line))
+
+        buff  = '\n'.join(buff)
+        traj['pvt_buffer'] = buff
+
+        if upload:
+            tfile = f"{name}.trj"
+            traj['trajectory'] = name
+            try:
+                self.upload_trajectory(tfile, buff)
+                traj['uploaded'] = True
+            except:
+                pass
+        self.trajectories[name] = traj
+        return traj
+
 
     @withConnectedXPS
     def arm_trajectory(self, name, verbose=False):
