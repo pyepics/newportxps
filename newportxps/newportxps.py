@@ -744,18 +744,17 @@ class NewportXPS:
 
 
     @withConnectedXPS
-    def define_line_trajectories(self, axis, group=None,
-                                 start=0, stop=1, step=0.001, scantime=10.0,
+    def define_line_trajectories(self, axis, group=None, pixeltime=0.01,
+                                 scantime=None, start=0, stop=1, step=0.001,
                                  accel=None, upload=True, verbose=False):
         """defines 'forward' and 'backward' trajectories for a simple
-        single element line scan in PVT Mode
+        single element line scan using PVT Mode
         """
         if group is not None:
             self.set_trajectory_group(group)
 
         if self.traj_group is None:
-            print("Must define a trajectory group first!")
-            return
+            raise XPSException("No trajectory group defined")
 
         for axname in (axis, axis.upper(), axis.lower(), axis.title()):
             stage = "%s.%s" % (self.traj_group, axname)
@@ -776,8 +775,9 @@ class NewportXPS:
         step = scandir*abs(step)
 
         npulses  = int((abs(stop - start) + abs(step)*1.1) / abs(step))
-        scantime = float(abs(scantime))
-        pixeltime= scantime / (npulses-1)
+        if pixeltime is None and scantime is not None:
+            scantime = float(abs(scantime))
+            pixeltime= scantime / (npulses-1)
         scantime = pixeltime*npulses
 
         distance = (abs(stop - start) + abs(step))*1.0
@@ -787,7 +787,9 @@ class NewportXPS:
         rampdist = velocity*ramptime
         offset   = step/2.0 + scandir*rampdist
 
-        trajbase = {'axes': [axis], 'pixeltime': pixeltime,
+        trajbase = {'axes': [axis],
+                    'type': 'line',
+                    'pixeltime': pixeltime,
                     'npulses': npulses, 'nsegments': 3}
 
         self.trajectories['foreward'] = {'start': [start-offset],
@@ -868,8 +870,7 @@ class NewportXPS:
         """
         tgroup = self.traj_group
         if tgroup is None:
-            print("Must define a trajectory group first!")
-            return
+            raise XPSException("No trajectory group defined")
 
         all_axes = [a for a in self.groups[tgroup]['positioners']]
 
@@ -904,7 +905,7 @@ class NewportXPS:
 
         if max_accels is None:
             max_accels = {}
-        pos = {}
+        pos, dpos = {}, {}
         velo = {}
         accel = {}
         start = {}
@@ -920,7 +921,9 @@ class NewportXPS:
                 # mid points between the desired positions
                 mid = [3*upos[0]-2*upos[1], 2*upos[0] - upos[1]]
                 mid.extend(upos)
-                mid.extend([2*upos[-1]-upos[-2], 3*upos[-1]-2*upos[-2]])
+                mid.extend([2*upos[-1]-upos[-2],
+                            3*upos[-1]-2*upos[-2],
+                            ])
                 mid = np.array(mid)
                 pos[axes] = 0.5*(mid[1:] + mid[:-1])
 
@@ -931,32 +934,32 @@ class NewportXPS:
                 a0 = (v1-v0)/dtime
                 start[axes] = p1 - (p1-p0)*dtime*max(v0, 0.5*maxv)/max(a0, 0.5*maxa)
 
-                pos[axes] = pos[axes][1:] - start[axes]
+                pos[axes] = np.diff(pos[axes] - start[axes])
                 velo[axes] = np.gradient(pos[axes])/times
                 velo[axes][-1] = 0.0
                 accel[axes] = np.gradient(velo[axes])/times
 
                 if (max(abs(velo[axes])) > maxv):
                     errmsg = f"max velocity {maxv} violated for {axes}"
-                    print(axes, velo[axes])
                     raise ValueError(errmsg)
                 if (max(abs(accel[axes])) > maxa):
                     errmsg = f"max acceleration {maxa} violated for {axes}"
-                    print(axes, accel[axes])
                     raise ValueError(errmsg)
-
             else:
                 start[axes] = None
                 pos[axes] = np.zeros(npulses+1, dtype=np.float64)
                 velo[axes] = np.zeros(npulses+1, dtype=np.float64)
                 accel[axes] = np.zeros(npulses+1, dtype=np.float64)
 
+
         traj = {'axes': all_axes,
+                'type': 'array',
                 'start': start, 'pixeltime': dtime,
                 'npulses': npulses, 'nsegments': npulses+1,
                 'uploaded': False}
 
-        buff = []
+        buff = ['']
+
         for n in range(npulses+1):
             line = [f"{dtime:.8f}"]
             for axes in all_axes:
@@ -969,7 +972,7 @@ class NewportXPS:
 
         if upload:
             tfile = f"{name}.trj"
-            traj['trajectory'] = name
+            traj['name'] = name
             try:
                 self.upload_trajectory(tfile, buff)
                 traj['uploaded'] = True
@@ -980,7 +983,31 @@ class NewportXPS:
 
 
     @withConnectedXPS
-    def arm_trajectory(self, name, verbose=False):
+    def move_to_trajectory_start(self, name):
+        """
+        move to the start position of a trajectory
+        """
+        tgroup = self.traj_group
+        if tgroup is None:
+            raise XPSException("No trajectory group defined")
+
+        traj = self.trajectories.get(name, None)
+        if traj is None:
+            raise XPSException("Cannot find trajectory named '%s'" %  name)
+
+        if traj['type'] == 'line':
+            for pos, axes in zip(traj['start'], traj['axes']):
+                self.move_stage(f'{tgroup}.{axes}', pos)
+
+        elif traj['type'] == 'array':
+            for axes, pos in traj['start'].items():
+                if pos is not None:
+                    self.move_stage(f'{tgroup}.{axes}', pos)
+
+
+
+    @withConnectedXPS
+    def arm_trajectory(self, name, verbose=False, move_to_start=True):
         """
         set up the trajectory from previously defined, uploaded trajectory
         """
@@ -993,6 +1020,9 @@ class NewportXPS:
 
         self.traj_state = ARMING
         self.traj_file = '%s.trj'  % name
+
+        if move_to_start:
+            self.move_to_trajectory_start(name)
 
         # move_kws = {}
         outputs = []
