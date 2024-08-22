@@ -16,7 +16,7 @@ authors = [
     {name="Matthew Newville", email="newville@cars.uchicago.edu"},
 ]
 
-dependencies = ['pysftp']
+dependencies = ['pysftp', 'numpy']
 description = "Python interface to Newport XPS motion controllers"
 readme = "README.md"
 requires-python = ">=3.8"
