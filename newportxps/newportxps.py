@@ -788,7 +788,7 @@ class NewportXPS:
         trajbase = {'axes': [axis],
                     'type': 'line',
                     'pixeltime': pixeltime, 'uploaded': False,
-                    'npulses': npulses, 'nsegments': 3}
+                    'npulses': npulses+1, 'nsegments': 3}
 
         self.trajectories['foreward'] = {'start': [start-offset],
                                          'stop':  [stop +offset]}
@@ -826,7 +826,7 @@ class NewportXPS:
                                        self.linear_template % fore)
                 self.upload_trajectory('backward.trj',
                                        self.linear_template % back)
-                self.trajectories['backward']['uploaded'] = True
+                self.trajectories['foreward']['uploaded'] = True
                 self.trajectories['backward']['uploaded'] = True
                 ret = True
             except:
@@ -955,7 +955,7 @@ class NewportXPS:
         traj = {'axes': all_axes,
                 'type': 'array',
                 'start': start, 'pixeltime': dtime,
-                'npulses': npulses, 'nsegments': npulses+1,
+                'npulses': npulses+1, 'nsegments': npulses+1,
                 'uploaded': False}
 
         buff = ['']
