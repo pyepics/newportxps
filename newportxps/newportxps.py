@@ -74,11 +74,12 @@ class NewportXPS:
         err, uptime = self._xps.ElapsedTimeGet(self._sid)
         self.check_error(err, msg="Elapsed Time")
         boottime = time.time() - uptime
-        out = ["# XPS host:         %s (%s)" % (self.host, socket.getfqdn(self.host)),
-               "# Firmware:         %s" % self.firmware_version,
-               "# Current Time:     %s" % time.ctime(),
-               "# Last Reboot:      %s" % time.ctime(boottime),
-               "# Trajectory Group: %s" % self.traj_group,
+        hostn = socket.getfqdn(self.host)
+        out = [f"# XPS host:         {self.host} ({hostn})",
+               f"# Firmware:         {self.firmware_version}",
+               f"# Current Time:     {time.ctime()}",
+               f"# Last Reboot:      {time.ctime(boottime)}",
+               f"# Trajectory Group: {self.traj_group}",
                ]
 
         out.append("# Groups and Stages")
@@ -87,14 +88,13 @@ class NewportXPS:
 
         for groupname, status in self.get_group_status().items():
             this = self.groups[groupname]
-            out.append("%s (%s), Status: %s" %
-                       (groupname, this['category'], status))
+            out.append(f"{groupname} ({this['category']}), Status: {status}")
             for pos in this['positioners']:
-                stagename = '%s.%s' % (groupname, pos)
+                stagename = f"{groupname}.{pos}"
                 stage = self.stages[stagename]
-                out.append("   %s (%s)"  % (stagename, stage['stagetype']))
-                out.append("      Hardware Status: %s"  % (hstat[stagename]))
-                out.append("      Positioner Errors: %s"  % (perrs[stagename]))
+                out.extend([f"# {stagename} ({stage['stagetype']})",
+                            f"      Hardware Status: {hstat[stagename]}",
+                            f"      Positioner Errors: {perrs[stagename]}"])
         return "\n".join(out)
 
 
@@ -104,7 +104,7 @@ class NewportXPS:
         try:
             self._xps.Login(self._sid, self.username, self.password)
         except:
-            raise XPSException('Login failed for %s' % self.host)
+            raise XPSException(f'Login failed for {self.host}')
 
         err, val = self._xps.FirmwareVersionGet(self._sid)
         self.firmware_version = val
@@ -123,11 +123,11 @@ class NewportXPS:
 
     def check_error(self, err, msg='', with_raise=True):
         if err != 0:
-            err = "%d" % err
+            err = f"{err}"
             desc = self._xps.errorcodes.get(err, 'unknown error')
-            print("XPSError: message= %s, error=%s, description=%s" % (msg, err, desc))
+            print(f"XPSError: message={msg}, error={err}, description={desc}")
             if with_raise:
-                raise XPSException("%s %s [Error %s]" % (msg, desc, err))
+                raise XPSException(f"{msg} {desc} [Error {err}]")
 
     def save_systemini(self, fname='system.ini'):
         """
@@ -198,13 +198,13 @@ class NewportXPS:
                 self.stages[sname]['max_velo']  = ret[1]
                 self.stages[sname]['max_accel'] = ret[2]/3.0
             except:
-                print("could not set max velo/accel for %s" % sname)
+                print(f"could not set max velo/accel for {name}")
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
             try:
                 self.stages[sname]['low_limit']  = ret[1]
                 self.stages[sname]['high_limit'] = ret[2]
             except:
-                print("could not set limits for %s" % sname)
+                print(f"could not set limits for {sname}")
 
         return self.groups
 
@@ -338,11 +338,11 @@ class NewportXPS:
         gkp, gki, gkd, kform, ffgain
         """
         if stage not in self.stages:
-            print("Stage '%s' not found: " % stage)
+            print(f"Stage '{stage}' not found: ")
             return
         params = self._xps.PositionerCorrectorPIDFFVelocityGet(self._sid, stage)
         if params[0] != 0 or len(params) != 13:
-            print("error getting tuning parameters for %s" % stage)
+            print(f"error getting tuning parameters for {stage}")
             return
 
         params = params[1:]
@@ -378,11 +378,11 @@ class NewportXPS:
         gkp, gki, gkd, kform, ffgain
         """
         if stage not in self.stages:
-            print("Stage '%s' not found: " % stage)
+            print(f"Stage '{stage}' not found: ")
             return
         params = self._xps.PositionerCorrectorPIDFFVelocityGet(self._sid, stage)
         if params[0] != 0 or len(params) != 13:
-            print("error getting tuning parameters for %s" % stage)
+            print(f"error getting tuning parameters for {stage}")
             return
 
         params = params[1:]
@@ -407,8 +407,8 @@ class NewportXPS:
                 if group['category'].lower().startswith('multiple'):
                     pvtgroups.append(gname)
             pvtgroups = ', '.join(pvtgroups)
-            msg = "'%s' cannot be a trajectory group, must be one of %s"
-            raise XPSException(msg % (group, pvtgroups))
+            msg = f"'{group}' cannot be a trajectory group, must be one of {pvtgroups}"
+            raise XPSException(msg)
 
         self.traj_group = group
         self.traj_positioners = self.groups[group]['positioners']
@@ -423,7 +423,7 @@ class NewportXPS:
             try:
                 self.enable_group(self.traj_group)
             except XPSException:
-                print("Warning: could not enable trajectory group '%s'"% self.traj_group)
+                print(f"Warning: could not enable trajectory group '{self.traj_group}'")
                 return
 
         for i in range(64):
@@ -455,14 +455,14 @@ class NewportXPS:
         if group is None:
             for group in self.groups:
                 err, ret = method(self._sid, group)
-                self.check_error(err, msg="%s group '%s'" % (action, group),
+                self.check_error(err, msg=f"{action} group '{group}'",
                                  with_raise=with_raise)
         elif group in self.groups:
             err, ret = method(self._sid, group)
-            self.check_error(err, msg="%s group '%s'" % (action, group),
+            self.check_error(err, msg=f"%{action} group '{group}'",
                              with_raise=with_raise)
         else:
-            raise ValueError("Group '%s' not found" % group)
+            raise ValueError("Group '{group}' not found")
 
     def kill_group(self, group=None):
         """
@@ -556,10 +556,10 @@ class NewportXPS:
         out = {}
         for group in self.groups:
             err, stat = self._xps.GroupStatusGet(self._sid, group)
-            self.check_error(err, msg="GroupStatus '%s'" % (group))
+            self.check_error(err, msg=f"GroupStatus '{group}'")
 
             err, val = self._xps.GroupStatusStringGet(self._sid, stat)
-            self.check_error(err, msg="GroupStatusString '%s'" % (stat))
+            self.check_error(err, msg=f"GroupStatusString '{stat}'")
 
             out[group] = val
         return out
@@ -574,10 +574,10 @@ class NewportXPS:
             if stage in ('', None):
                 continue
             err, stat = self._xps.PositionerHardwareStatusGet(self._sid, stage)
-            self.check_error(err, msg="Pos HardwareStatus '%s'" % (stage))
+            self.check_error(err, msg=f"Pos HardwareStatus '{stage}'")
 
             err, val = self._xps.PositionerHardwareStatusStringGet(self._sid, stat)
-            self.check_error(err, msg="Pos HardwareStatusString '%s'" % (stat))
+            self.check_error(err, msg=f"Pos HardwareStatusString '{stat}'")
             out[stage] = val
         return out
 
@@ -591,10 +591,10 @@ class NewportXPS:
             if stage in ('', None):
                 continue
             err, stat = self._xps.PositionerErrorGet(self._sid, stage)
-            self.check_error(err, msg="Pos Error '%s'" % (stage))
+            self.check_error(err, msg=f"Pos Error '{stage}'")
 
             err, val = self._xps.PositionerErrorStringGet(self._sid, stat)
-            self.check_error(err, msg="Pos ErrorString '%s'" % (stat))
+            self.check_error(err, msg=f"Pos ErrorString '{stat}'")
 
             if len(val) < 1:
                 val = 'OK'
@@ -608,8 +608,8 @@ class NewportXPS:
         set velocity for stage
         """
         if stage not in self.stages:
-            print("Stage '%s' not found" % stage)
-            return
+            raise XPSException(f"Stage '{stage}' not found")
+
         ret, v_cur, a_cur, jt0_cur, jt1_cur = \
              self._xps.PositionerSGammaParametersGet(self._sid, stage)
         if accl is None:
@@ -680,15 +680,14 @@ class NewportXPS:
            relative (bool): whether move is relative [False]
         """
         if stage not in self.stages:
-            print("Stage '%s' not found" % stage)
-            return
+            raise XPSException(f"Stage '{stage}' not found")
 
         move = self._xps.GroupMoveAbsolute
         if relative:
             move = self._xps.GroupMoveRelative
 
         err, ret = move(self._sid, stage, [value])
-        self.check_error(err, msg="Moving stage '%s'" % (stage))
+        self.check_error(err, msg=f"Moving stage '{stage}'")
         return ret
 
     @withConnectedXPS
@@ -700,11 +699,10 @@ class NewportXPS:
            stage (string): name of stage -- must be in self.stages
         """
         if stage not in self.stages:
-            print("Stage '%s' not found: " % stage)
-            return
+            raise XPSException(f"Stage '{stage}' not found")
 
         err, val = self._xps.GroupPositionCurrentGet(self._sid, stage, 1)
-        self.check_error(err, msg="Get Stage Position '%s'" % (stage))
+        self.check_error(err, msg=f"Get Stage Position '{stage}'")
         return val
 
     read_stage_position = get_stage_position
@@ -757,7 +755,7 @@ class NewportXPS:
             raise XPSException("No trajectory group defined")
 
         for axname in (axis, axis.upper(), axis.lower(), axis.title()):
-            stage = "%s.%s" % (self.traj_group, axname)
+            stage = f"{self.traj_group}.{axname}"
             if stage in self.stages:
                 break
 
@@ -789,7 +787,7 @@ class NewportXPS:
 
         trajbase = {'axes': [axis],
                     'type': 'line',
-                    'pixeltime': pixeltime,
+                    'pixeltime': pixeltime, 'uploaded': False,
                     'npulses': npulses, 'nsegments': 3}
 
         self.trajectories['foreward'] = {'start': [start-offset],
@@ -808,16 +806,15 @@ class NewportXPS:
                 val = 0.0
                 if ax == axis:
                     val = base[attr]
-                fore["%s_%s" % (ax, attr)] = val
+                fore[f"{ax}_{attr}"] = val
 
         back = fore.copy()
-        back["%s_start" % axis] = fore["%s_stop" % axis]
-        back["%s_stop" % axis]  = fore["%s_start" % axis]
+        back[f"{axis}_start"] = fore[f"{axis}_stop"]
+        back[f"{axis}_stop"]  = fore[f"{axis}_start"]
         for attr in ('velo', 'ramp', 'dist'):
-            back["%s_%s" % (axis, attr)] *= -1.0
+            back[f"{axis}_{attr}"] *= -1.0
 
         if verbose:
-            print("TRAJ Text Fore, Back:")
             print(self.linear_template % fore)
             print(self.linear_template % back)
 
@@ -829,6 +826,8 @@ class NewportXPS:
                                        self.linear_template % fore)
                 self.upload_trajectory('backward.trj',
                                        self.linear_template % back)
+                self.trajectories['backward']['uploaded'] = True
+                self.trajectories['backward']['uploaded'] = True
                 ret = True
             except:
                 raise ValueError("error uploading trajectory")
@@ -853,7 +852,8 @@ class NewportXPS:
         Returns:
         -------
         dict with information about trajcetory.  This will include values for
-             pvt+buff:  full text of trajectory buffer
+             pvt_buff:  full text of trajectory buffer
+             type: 'array'
              start: dict of starting values (backed up from first point so that
                     positioner can be accelerated to the desired velocity for the
                     second trajectory segment)
@@ -977,7 +977,7 @@ class NewportXPS:
                 self.upload_trajectory(tfile, buff)
                 traj['uploaded'] = True
             except:
-                pass
+                traj['uploaded'] = False
         self.trajectories[name] = traj
         return traj
 
@@ -985,7 +985,7 @@ class NewportXPS:
     @withConnectedXPS
     def move_to_trajectory_start(self, name):
         """
-        move to the start position of a trajectory
+        move to the start position of a named trajectory
         """
         tgroup = self.traj_group
         if tgroup is None:
@@ -993,7 +993,7 @@ class NewportXPS:
 
         traj = self.trajectories.get(name, None)
         if traj is None:
-            raise XPSException("Cannot find trajectory named '%s'" %  name)
+            raise XPSException(f"Cannot find trajectory named '{name}'")
 
         if traj['type'] == 'line':
             for pos, axes in zip(traj['start'], traj['axes']):
@@ -1009,17 +1009,21 @@ class NewportXPS:
     @withConnectedXPS
     def arm_trajectory(self, name, verbose=False, move_to_start=True):
         """
-        set up the trajectory from previously defined, uploaded trajectory
+        prepare to run a named (assumed uploaded) trajectory
         """
         if self.traj_group is None:
             print("Must set group name!")
 
         traj = self.trajectories.get(name, None)
         if traj is None:
-            raise XPSException("Cannot find trajectory named '%s'" %  name)
+            raise XPSException(f"Cannot find trajectory '{name}'")
+
+        if not traj['uploaded']:
+            raise XPSException(f"trajectory '{name}' has not been uploaded")
+
 
         self.traj_state = ARMING
-        self.traj_file = '%s.trj'  % name
+        self.traj_file = f'{name}.trj'
 
         if move_to_start:
             self.move_to_trajectory_start(name)
@@ -1028,12 +1032,13 @@ class NewportXPS:
         outputs = []
         for out in self.gather_outputs:
             for i, ax in enumerate(traj['axes']):
-                outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
+                outputs.append(f'{self.traj_group}.{ax}.{out}')
 
         end_segment = traj['nsegments']
         self.nsegments = end_segment
 
-        self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
+        o = " ".join(outputs)
+        self.gather_titles = f"{self.gather_header}\n#{o}\n"
         err, ret = self._xps.GatheringReset(self._sid)
         self.check_error(err, msg="GatheringReset")
         if verbose:
@@ -1083,7 +1088,8 @@ class NewportXPS:
         if self.traj_state != ARMED:
             raise XPSException("Must arm trajectory before running!")
 
-        buffer = ('Always', '%s.PVT.TrajectoryPulse' % self.traj_group,)
+        tgroup = self.traj_group
+        buffer = ('Always', f'{tgroup}.PVT.TrajectoryPulse',)
         err, ret = self._xps.EventExtendedConfigurationTriggerSet(self._sid, buffer,
                                                                   ('0','0'), ('0','0'),
                                                                   ('0','0'), ('0','0'))
@@ -1217,7 +1223,7 @@ class NewportXPS:
         f.close()
         nlines = len(buff.split('\n')) - 1
         if verbose:
-            print('Wrote %i lines, %i bytes to %s' % (nlines, len(buff), fname))
+            print(f'Wrote {nlines} lines, {len(buff)} bytes to {fname}')
         if set_idle_when_done:
             self.traj_state = IDLE
 
@@ -1248,7 +1254,7 @@ class NewportXPS:
         if accel_values is None:
             accel_values = []
             for posname in self.traj_positioners:
-                accel = self.stages["%s.%s"%(self.traj_group,  posname)]['max_accel']
+                accel = self.stages[f"{self.traj_group}.{posname}"]['max_accel']
                 accel_values.append(accel)
         accel_values = np.array(accel_values)
 
@@ -1313,10 +1319,9 @@ class NewportXPS:
         """run trajectory in PVT mode"""
         traj = self.trajectories.get(name, None)
         if traj is None:
-            print('Cannot find trajectory named %s' % name)
-            return
+            raise XPSException(f'Cannot find trajectory named {name}')
 
-        traj_file = '%s.trj' % name
+        traj_file = f'{name}.trj'
         dtime = traj['pulse_time']
         ramps = []
         for positioner in self.traj_positioners:
@@ -1333,11 +1338,11 @@ class NewportXPS:
         outputs = []
         for out in self.gather_outputs:
             for i, ax in enumerate(traj['axes']):
-                outputs.append('%s.%s.%s' % (self.traj_group, ax, out))
+                outputs.append(f'{self.traj_group}.{ax}.{out}')
                 # move_kws[ax] = float(traj['start'][i])
 
-        self.gather_titles = "%s\n#%s\n" % (self.gather_header, " ".join(outputs))
-
+        o = " ".join(outputs)
+        self.gather_titles = f"{self.gather_header}\n#{o}\n"
         self._xps.GatheringReset(self._sid)
         self._xps.GatheringConfigurationSet(self._sid, self.gather_outputs)
 
