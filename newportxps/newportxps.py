@@ -198,7 +198,7 @@ class NewportXPS:
                 self.stages[sname]['max_velo']  = ret[1]
                 self.stages[sname]['max_accel'] = ret[2]/3.0
             except:
-                print(f"could not set max velo/accel for {name}")
+                print(f"could not set max velo/accel for {sname}")
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
             try:
                 self.stages[sname]['low_limit']  = ret[1]
