@@ -168,7 +168,7 @@ class NewportXPS:
         sconf.read_string(initext)
 
         # read and populate lists of groups first
-        for gtype, glist in sconf.items('GROUPS'): # ].items():
+        for gtype, glist in sconf.items('GROUPS'):
             if len(glist) > 0:
                 for gname in glist.split(','):
                     gname = gname.strip()
@@ -198,13 +198,13 @@ class NewportXPS:
                 self.stages[sname]['max_velo']  = ret[1]
                 self.stages[sname]['max_accel'] = ret[2]/3.0
             except:
-                print(f"could not set max velo/accel for {sname}")
+                print(f"could not read max velo/accel for {sname}")
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
             try:
                 self.stages[sname]['low_limit']  = ret[1]
                 self.stages[sname]['high_limit'] = ret[2]
             except:
-                print(f"could not set limits for {sname}")
+                print(f"could not read limits for {sname}")
 
         return self.groups
 
@@ -966,7 +966,7 @@ class NewportXPS:
                 p, v = pos[axes][n], velo[axes][n]
                 line.extend([f"{p:.8f}", f"{v:.8f}"])
             buff.append(', '.join(line))
-
+        buff.append('')
         buff  = '\n'.join(buff)
         traj['pvt_buffer'] = buff
 
@@ -1175,7 +1175,7 @@ class NewportXPS:
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
         dt.add("gather before multilinesget, npulses=%d" % (npulses))
         try:
-            ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
+            ret, _ = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
         except ValueError:
             print("Failed to read gathering: ", ret, buff)
             return (0, ' \n')
@@ -1337,9 +1337,8 @@ class NewportXPS:
 
         outputs = []
         for out in self.gather_outputs:
-            for i, ax in enumerate(traj['axes']):
+            for ax in traj['axes']:
                 outputs.append(f'{self.traj_group}.{ax}.{out}')
-                # move_kws[ax] = float(traj['start'][i])
 
         o = " ".join(outputs)
         self.gather_titles = f"{self.gather_header}\n#{o}\n"
@@ -1350,7 +1349,7 @@ class NewportXPS:
                                                            2, step_number + 1, dtime)
         self.check_error(err, msg="MultipleAxesPVTPulseOutputSet", with_raise=False)
 
-        err, ret = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
+        err, _ = self._xps.MultipleAxesPVTVerification(self._sid, self.traj_group, traj_file)
         self.check_error(err, msg="MultipleAxesPVTVerification", with_raise=False)
 
         buffer = ('Always', self.traj_group + '.PVT.TrajectoryPulse')
@@ -1363,7 +1362,7 @@ class NewportXPS:
                                                                  ('',), ('',), ('',), ('',))
         self.check_error(err, msg="EventExtendedConfigurationActionSet", with_raise=False)
 
-        eventID, m = self._xps.EventExtendedStart(self._sid)
+        eventID, _ = self._xps.EventExtendedStart(self._sid)
 
         self._xps.MultipleAxesPVTExecution(self._sid, self.traj_group, traj_file, 1)
         self._xps.EventExtendedRemove(self._sid, eventID)
@@ -1371,7 +1370,7 @@ class NewportXPS:
 
         npulses = 0
         if save:
-            npulses, outbuff = self.read_and_save(outfile)
+            npulses, _ = self.read_and_save(outfile)
 
         self._xps.GroupMoveRelative(self._sid, self.traj_group, ramps)
         return npulses
@@ -1379,7 +1378,6 @@ class NewportXPS:
 
 
 if __name__ == '__main__':
-    import sys
     ipaddr = sys.argv[1]
     x = NewportXPS(ipaddr)
     x.read_systemini()
