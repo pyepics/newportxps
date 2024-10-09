@@ -110,7 +110,7 @@ class NewportXPS:
         self.firmware_version = val
         self.ftphome = ''
 
-        if any([m in self.firmware_version for m in ['XPS-D', 'HXP-D']]):
+        if any([m in self.firmware_version for m in ['XPS-D', 'HXP-D', 'XPS-RL']]):
             err, val = self._xps.Send(self._sid, 'InstallerVersionGet(char *)')
             self.firmware_version = val
             self.ftpconn = SFTPWrapper(**self.ftpargs)
