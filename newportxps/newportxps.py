@@ -1069,7 +1069,7 @@ class NewportXPS:
 
     @withConnectedXPS
     def run_trajectory(self, name=None, save=True, clean=False,
-                       output_file='Gather.dat', verbose=False):
+                       output_file='Gather.dat', verbose=False, move_to_start=True):
 
         """run a trajectory in PVT mode
 
@@ -1083,7 +1083,7 @@ class NewportXPS:
                 self._xps.CleanCoreDumpFolder(self._sid)
 
         if name in self.trajectories and self.traj_state != ARMED:
-            self.arm_trajectory(name, verbose=verbose)
+            self.arm_trajectory(name, verbose=verbose, move_to_start=move_to_start)
 
         if self.traj_state != ARMED:
             raise XPSException("Must arm trajectory before running!")
