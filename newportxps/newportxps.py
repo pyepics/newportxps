@@ -119,6 +119,9 @@ class NewportXPS:
             if 'XPS-C' in self.firmware_version:
                 self.ftphome = '/Admin'
         self.read_systemini()
+        if 'xps-d' in self.firmware_version.lower():
+            self._xps.CleanTmpFolder(self._sid)
+            self._xps.CleanCoreDumpFolder(self._sid)
 
 
     def check_error(self, err, msg='', with_raise=True):
