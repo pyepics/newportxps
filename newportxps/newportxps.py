@@ -1008,7 +1008,6 @@ class NewportXPS:
                     self.move_stage(f'{tgroup}.{axes}', pos)
 
 
-
     @withConnectedXPS
     def arm_trajectory(self, name, verbose=False, move_to_start=True):
         """
@@ -1078,7 +1077,7 @@ class NewportXPS:
 
         The trajectory *must be in the ARMED state
         """
-
+        dt = debugtime()
         if 'xps-d' in self.firmware_version.lower():
             self._xps.CleanTmpFolder(self._sid)
 
@@ -1091,6 +1090,7 @@ class NewportXPS:
         if self.traj_state != ARMED:
             raise XPSException("Must arm trajectory before running!")
 
+        dt.add('armed')
         tgroup = self.traj_group
         buffer = ('Always', f'{tgroup}.PVT.TrajectoryPulse',)
         err, ret = self._xps.EventExtendedConfigurationTriggerSet(self._sid, buffer,
@@ -1099,35 +1099,46 @@ class NewportXPS:
         self.check_error(err, msg="EventConfigTrigger")
         if verbose:
             print( " EventExtended Trigger Set ", ret)
-
+        dt.add('event trigger set')
         err, ret = self._xps.EventExtendedConfigurationActionSet(self._sid,
                                                             ('GatheringOneData',),
                                                             ('',), ('',),('',),('',))
         self.check_error(err, msg="EventConfigAction")
         if verbose:
             print( " EventExtended Action  Set ", ret)
-
+        dt.add('event action set')
         eventID, m = self._xps.EventExtendedStart(self._sid)
         self.traj_state = RUNNING
 
         if verbose:
             print( " EventExtended ExtendedStart ", eventID, m)
-
+        dt.add('event start')
         err, ret = self._xps.MultipleAxesPVTExecution(self._sid,
                                                       self.traj_group,
                                                       self.traj_file, 1)
         self.check_error(err, msg="PVT Execute", with_raise=False)
         if verbose:
-            print( " PVT Execute  ", ret)
-
+            print( " PVT Execute done ", ret)
+        dt.add('pvt execute')
         ret = self._xps.EventExtendedRemove(self._sid, eventID)
         ret = self._xps.GatheringStop(self._sid)
-
+        dt.add('gathering stop')
         self.traj_state = COMPLETE
         npulses = 0
         if save:
-            self.read_and_save(output_file, verbose=verbose)
+            npulses, buff = self.read_gathering(set_idle_when_done=False,
+                                                verbose=verbose)
+            dt.add('read gathering')
+            if npulses > 0:
+                self.save_gathering_file(output_file, buff,
+                                         verbose=verbose,
+                                         set_idle_when_done=False)
+                dt.add('saved gathering')
+            self.ngathered = npulses
+            # self.read_and_save(output_file, verbose=verbose)
         self.traj_state = IDLE
+        if verbose:
+            dt.show()
         return npulses
 
     @withConnectedXPS
@@ -1178,9 +1189,9 @@ class NewportXPS:
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
         dt.add("gather before multilinesget, npulses=%d" % (npulses))
         try:
-            ret, _ = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
+            ret, buff = self._xps.GatheringDataMultipleLinesGet(self._sid, 0, npulses)
         except ValueError:
-            print("Failed to read gathering: ", ret, buff)
+            print("Failed to read gathering: ", ret)
             return (0, ' \n')
         dt.add("gather after multilinesget  %d" % ret)
         nchunks = -1
