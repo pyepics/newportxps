@@ -199,7 +199,7 @@ class NewportXPS:
             ret = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid, sname)
             try:
                 self.stages[sname]['max_velo']  = ret[1]
-                self.stages[sname]['max_accel'] = ret[2]/3.0
+                self.stages[sname]['max_accel'] = 0.75*ret[2]
             except:
                 print(f"could not read max velo/accel for {sname}")
             ret = self._xps.PositionerUserTravelLimitsGet(self._sid, sname)
@@ -762,9 +762,8 @@ class NewportXPS:
             if stage in self.stages:
                 break
 
-        # print(" Stage ", stage,  self.stages[stage])
-        max_velo  = 0.75*self.stages[stage]['max_velo']
-        max_accel = 0.5*self.stages[stage]['max_accel']
+        max_velo  = self.stages[stage]['max_velo']
+        max_accel = self.stages[stage]['max_accel']
 
         if accel is None:
             accel = max_accel
@@ -785,7 +784,7 @@ class NewportXPS:
         velocity = min(distance/scantime, max_velo)
 
         ramptime = max(2.e-5, abs(velocity/accel))
-        rampdist = velocity*ramptime
+        rampdist = 0.5*velocity*ramptime
         offset   = step/2.0 + scandir*rampdist
 
         trajbase = {'axes': [axis],
@@ -1029,7 +1028,6 @@ class NewportXPS:
 
         if move_to_start:
             self.move_to_trajectory_start(name)
-
         # move_kws = {}
         outputs = []
         for out in self.gather_outputs:
@@ -1051,7 +1049,7 @@ class NewportXPS:
 
         if verbose:
             print(" GatheringConfigurationSet outputs ", outputs)
-            print(" GatheringConfigurationSet returned ", ret)
+            print(" GatheringConfigurationSet returned ", ret, time.ctime())
             print(" segments, pixeltime" , end_segment, traj['pixeltime'])
 
         err, ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
@@ -1059,14 +1057,14 @@ class NewportXPS:
                                                            traj['pixeltime'])
         self.check_error(err, msg="PVTPulseOutputSet", with_raise=False)
         if verbose:
-            print(" PVTPulse  ", ret)
+            print(" PVTPulse  ", ret, time.ctime())
         err, ret = self._xps.MultipleAxesPVTVerification(self._sid,
                                                          self.traj_group,
                                                          self.traj_file)
 
         self.check_error(err, msg="PVTVerification", with_raise=False)
         if verbose:
-            print(" PVTVerify  ", ret)
+            print(" PVTVerify  ", ret, time.ctime())
         self.traj_state = ARMED
 
     @withConnectedXPS
