@@ -9,6 +9,13 @@ logger = logging.getLogger('paramiko')
 logger.setLevel(logging.ERROR)
 
 
+SFTP_ERROR_MESSAGE = """Could not connect to XPS with sftp: no host key.
+
+You may need to add a host key to your `ssh known_hosts` file, using
+   ssh-keyscan {host} >> ~/.ssh/known_hosts
+
+or first connecting with  `sftp Administrator@{host}` """
+
 HAS_PYSFTP = False
 try:
     import pysftp
@@ -72,11 +79,7 @@ class SFTPWrapper(FTPBaseWrapper):
                                            username=self.username,
                                            password=self.password)
         except:
-            print("ERROR: sftp connection to %s failed" % self.host)
-            print("You may need to add the host keys for your XPS to your")
-            print("ssh known_hosts file, using a command like this:")
-            print("  ssh-keyscan %s >> ~/.ssh/known_hosts" % self.host)
-
+            raise ValueError(SFTP_ERROR_MESSAGE.format(host=self.host))
 
     def save(self, remotefile, localfile):
         "save remote file to local file"
