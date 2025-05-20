@@ -107,6 +107,7 @@ class NewportXPS:
     def connect(self):
         self._sid = self._xps.TCP_ConnectToServer(self.host,
                                                   self.port, self.timeout)
+
         atexit.register(self.disconnect)
         try:
             self._xps.Login(self._sid, self.username, self.password)
@@ -116,7 +117,6 @@ class NewportXPS:
         err, val = self._xps.FirmwareVersionGet(self._sid)
         self.firmware_version = val
         self.ftphome = ''
-
         if any([m in self.firmware_version for m in ['XPS-D', 'HXP-D', 'XPS-RL']]):
             err, val = self._xps.Send(self._sid, 'InstallerVersionGet(char *)')
             self.firmware_version = val
@@ -203,7 +203,6 @@ class NewportXPS:
 
         if len(pvtgroups) == 1:
             self.set_trajectory_group(pvtgroups[0])
-
         for sname in self.stages:
             ret = self._xps.PositionerMaximumVelocityAndAccelerationGet(self._sid, sname)
             try:
@@ -217,7 +216,6 @@ class NewportXPS:
                 self.stages[sname]['high_limit'] = ret[2]
             except:
                 print(f"could not read limits for {sname}")
-
         return self.groups
 
     def download_trajectory(self, filename):
@@ -438,8 +436,8 @@ class NewportXPS:
                 print(f"Warning: could not enable trajectory group '{self.traj_group}'")
                 return
 
-        for i in range(64):
-            self._xps.EventExtendedRemove(self._sid, i)
+        #for i in range(64):
+        #    self._xps.EventExtendedRemove(self._sid, i)
 
         # build template for linear trajectory file:
         trajline1 = ['%(ramptime)f']
@@ -642,8 +640,6 @@ class NewportXPS:
             print("Do have a group to move")
             return
         ret = self._xps.GroupMoveAbort(self._sid, group)
-        print('abort group ', group, ret)
-
 
     @withConnectedXPS
     def move_group(self, group=None, **kws):
@@ -652,7 +648,7 @@ class NewportXPS:
         if group is None or group not in self.groups:
             group = self.traj_group
         if group is None:
-            print("Do have a group to move")
+            print("no group to move")
             return
         posnames = [p.lower() for p in self.groups[group]['positioners']]
         ret = self._xps.GroupPositionCurrentGet(self._sid, group, len(posnames))
@@ -1179,16 +1175,18 @@ class NewportXPS:
         t0 = time.time()
         while npulses < 1:
             try:
-                ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
+                gdat = self._xps.GatheringCurrentNumberGet(self._sid)
             except SyntaxError:
                 print("#XPS Gathering Read failed, will try again")
-                pass
+            if len(gdat) == 3:
+                ret, npulses, nx = gdat
+            if npulses < 1 or ret != 0:
+                time.sleep(0.1)
+
             if time.time()-t0 > 5:
                 print("Failed to get gathering size after 5 seconds: return 0 points")
                 print("Gather Returned: ", ret, npulses, nx, self._xps, time.ctime())
                 return (0, ' \n')
-            if npulses < 1 or ret != 0:
-                time.sleep(0.05)
         dt.add("gather num %d npulses=%d (%d)" % (ret, npulses, self.nsegments))
         counter = 0
         while npulses < 1 and counter < 5:
@@ -1285,7 +1283,7 @@ class NewportXPS:
         velocities = abs(distances / (scan_time))
         scan_time = float(abs(scan_time))
 
-        ramp_time = 1.25 * max(abs(velocities / accel_values))
+        ramp_time = 1.5 * max(abs(velocities / accel_values))
         ramp      = velocities * ramp_time
         print("ramp : ", ramp_time, ramp)
 
