@@ -1,6 +1,7 @@
  #!/usr/bin/env python
 
 import posixpath
+import atexit
 import sys
 import time
 import socket
@@ -97,10 +98,16 @@ class NewportXPS:
                             f"      Positioner Errors: {perrs[stagename]}"])
         return "\n".join(out)
 
+    def disconnect(self):
+        self.ftpconn.close()
+        if self._sid is not None:
+            self._xps.TCP_CloseSocket(self._sid)
+        self._sid = None
 
     def connect(self):
         self._sid = self._xps.TCP_ConnectToServer(self.host,
                                                   self.port, self.timeout)
+        atexit.register(self.disconnect)
         try:
             self._xps.Login(self._sid, self.username, self.password)
         except:
@@ -119,6 +126,8 @@ class NewportXPS:
             if 'XPS-C' in self.firmware_version:
                 self.ftphome = '/Admin'
         self.read_systemini()
+
+    def clean_folders(self):
         if 'xps-d' in self.firmware_version.lower():
             self._xps.CleanTmpFolder(self._sid)
             self._xps.CleanCoreDumpFolder(self._sid)
@@ -830,6 +839,8 @@ class NewportXPS:
                                        self.linear_template % back)
                 self.trajectories['foreward']['uploaded'] = True
                 self.trajectories['backward']['uploaded'] = True
+                self.trajectories['foreward']['text'] = self.linear_template % fore
+                self.trajectories['backward']['text'] = self.linear_template % back
                 ret = True
             except:
                 raise ValueError("error uploading trajectory")
@@ -1274,7 +1285,7 @@ class NewportXPS:
         velocities = abs(distances / (scan_time))
         scan_time = float(abs(scan_time))
 
-        ramp_time = 1.5 * max(abs(velocities / accel_values))
+        ramp_time = 1.25 * max(abs(velocities / accel_values))
         ramp      = velocities * ramp_time
         print("ramp : ", ramp_time, ramp)
 
