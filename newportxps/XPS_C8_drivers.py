@@ -91,6 +91,7 @@ class XPS:
         # print("SEND REC ", command, type(command))
         suffix = ',EndOfAPI'
         try:
+            XPS.__sockets[socketId].settimeout(30.0)
             XPS.__sockets[socketId].send(str2bytes(command))
             ret = bytes2str(XPS.__sockets[socketId].recv(1024))
             while (ret.find(suffix) == -1):
@@ -1139,7 +1140,7 @@ class XPS:
     def MultipleAxesPVTVerification (self, socketId, GroupName, TrajectoryFileName):
         command = 'MultipleAxesPVTVerification(' + GroupName + ',' + TrajectoryFileName + ')'
         return self.Send(socketId, command)
-    
+
     # MultipleAxesPTVerification :  Multiple axes PT trajectory verification
     def MultipleAxesPTVerification (self, socketId, GroupName, TrajectoryFileName):
         command = 'MultipleAxesPTVerification(' + GroupName + ',' + TrajectoryFileName + ')'
@@ -1156,7 +1157,7 @@ class XPS:
     def MultipleAxesPVTExecution (self, socketId, GroupName, TrajectoryFileName, ExecutionNumber):
         command = 'MultipleAxesPVTExecution(' + GroupName + ',' + TrajectoryFileName + ',' + str(ExecutionNumber) + ')'
         return self.Send(socketId, command)
-    
+
     # MultipleAxesPTExecution :  Multiple axes PT trajectory execution
     def MultipleAxesPTExecution (self, socketId, GroupName, TrajectoryFileName, ExecutionNumber):
         command = 'MultipleAxesPTExecution(' + GroupName + ',' + TrajectoryFileName + ',' + str(ExecutionNumber) + ')'
