@@ -1062,14 +1062,14 @@ class NewportXPS:
         err, ret = self._xps.MultipleAxesPVTPulseOutputSet(self._sid, self.traj_group,
                                                            2, end_segment,
                                                            traj['pixeltime'])
-        self.check_error(err, msg="PVTPulseOutputSet", with_raise=False)
+        self.check_error(err, msg="PVTPulseOutputSet", with_raise=True)
         if verbose:
             print(" PVTPulse  ", ret, time.ctime())
         err, ret = self._xps.MultipleAxesPVTVerification(self._sid,
                                                          self.traj_group,
                                                          self.traj_file)
 
-        self.check_error(err, msg="PVTVerification", with_raise=False)
+        self.check_error(err, msg="PVTVerification", with_raise=True)
         if verbose:
             print(" PVTVerify  ", ret, time.ctime())
         self.traj_state = ARMED
