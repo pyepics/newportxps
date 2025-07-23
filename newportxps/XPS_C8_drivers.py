@@ -91,7 +91,7 @@ class XPS:
         # print("SEND REC ", command, type(command))
         suffix = ',EndOfAPI'
         try:
-            XPS.__sockets[socketId].settimeout(30.0)
+            XPS.__sockets[socketId].settimeout(3600.0)
             XPS.__sockets[socketId].send(str2bytes(command))
             ret = bytes2str(XPS.__sockets[socketId].recv(1024))
             while (ret.find(suffix) == -1):
