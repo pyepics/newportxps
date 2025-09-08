@@ -16,13 +16,14 @@ authors = [
     {name="Matthew Newville", email="newville@cars.uchicago.edu"},
 ]
 
-dependencies = ['pysftp', 'numpy']
+dependencies = ['paramiko', 'numpy']
 description = "Python interface to Newport XPS motion controllers"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 keywords = ["motion control", "data collection"]
 
-license = {text = "BSD License"}
+license = "BSD"
+license-files = ["LICENSE"]
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -30,16 +31,14 @@ classifiers = [
     "Intended Audience :: Education",
     "Intended Audience :: Other Audience",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: Implementation :: Jython",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Education",
     "Topic :: Scientific/Engineering",
