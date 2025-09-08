@@ -16,6 +16,8 @@ You may need to add a host key to your `ssh known_hosts` file, using
 
 or first connecting with  `sftp Administrator@{host}` """
 
+import paramiko
+
 HAS_PYSFTP = False
 try:
     import pysftp
@@ -72,14 +74,34 @@ class SFTPWrapper(FTPBaseWrapper):
         if password is not None:
             self.password = password
 
-        if not HAS_PYSFTP:
-            raise ValueError("pysftp not installed.")
-        try:
-            self._conn = pysftp.Connection(self.host,
+        self._conn = self.__conn_paramiko(self.host,
                                            username=self.username,
                                            password=self.password)
-        except:
+
+    def __conn_pysftp(self, host, username, password):
+        return pysftp.Connection(host,
+                                   username=username,
+                                   password=password)
+
+    def __conn_paramiko(self, host, username, password):
+        try:
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh_client.connect(host, 22, username, password)
+
+        except paramiko.AuthenticationException:
+            print("Authentication failed. Check your username and password/key.")
             raise ValueError(SFTP_ERROR_MESSAGE.format(host=self.host))
+        except paramiko.SSHException as e:
+            print(f"SSH connection error: {e}")
+            raise ValueError(SFTP_ERROR_MESSAGE.format(host=self.host))
+        finally:
+            print("Connect with paramiko! ", host)
+            return ssh_client.open_sftp()
+
+    def cwd(self, remotedir):
+        print("CWD ", self._conn, self._conn._cwd)
+        self._conn.chdir(remotedir)
 
     def save(self, remotefile, localfile):
         "save remote file to local file"
