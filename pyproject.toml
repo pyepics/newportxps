@@ -22,7 +22,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["motion control", "data collection"]
 
-license = "BSD"
+license = "MIT"
 license-files = ["LICENSE"]
 
 classifiers = [
