@@ -750,8 +750,8 @@ class NewportXPS:
 
 
     @withConnectedXPS
-    def define_line_trajectories(self, axis, group=None, pixeltime=0.01,
-                                 scantime=None, start=0, stop=1, step=0.001,
+    def define_line_trajectories(self, axis, group=None, pixeltime=None,
+                                 scantime=None, start=0, stop=1, step=0.01,
                                  accel=None, upload=True, verbose=False):
         """defines 'forward' and 'backward' trajectories for a simple
         single element line scan using PVT Mode
@@ -780,17 +780,20 @@ class NewportXPS:
         step = scandir*abs(step)
 
         npulses  = int((abs(stop - start) + abs(step)*1.1) / abs(step))
-        if pixeltime is None and scantime is not None:
-            scantime = float(abs(scantime))
-            pixeltime= scantime / (npulses-1)
-        scantime = pixeltime*npulses
+        if pixeltime is None:
+            if scantime is None:
+                raise ValueError("line trajectory must set pixeltime or scantime")
+            else:
+                pixeltime = float(abs(scantime))/(npulses-1)
+        scantime = float(abs(pixeltime))*npulses
 
         distance = (abs(stop - start) + abs(step))*1.0
         velocity = min(distance/scantime, max_velo)
-
+        if verbose:
+            print(f"trajecory: {scantime=:.4f}, {pixeltime=:.4f}, {npulses=}, {start=:.4f}, {stop=:.4f}, {step=:.4f}")
         ramptime = max(2.e-5, abs(velocity/accel))
         rampdist = 0.5*velocity*ramptime
-        offset   = step/2.0 + scandir*rampdist
+        offset   = 0.5*step + scandir*rampdist
 
         trajbase = {'axes': [axis],
                     'type': 'line',
