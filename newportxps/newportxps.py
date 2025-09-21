@@ -790,7 +790,7 @@ class NewportXPS:
         distance = (abs(stop - start) + abs(step))*1.0
         velocity = min(distance/scantime, max_velo)
         if verbose:
-            print(f"trajecory: {scantime=:.4f}, {pixeltime=:.4f}, {npulses=}, {start=:.4f}, {stop=:.4f}, {step=:.4f}")
+            print(f"trajecory: {scantime=:.5f}, {pixeltime=:.5f}, {npulses=}, {start=:.5f}, {stop=:.5f}, {step=:.5f}")
         ramptime = max(2.e-5, abs(velocity/accel))
         rampdist = 0.5*velocity*ramptime
         offset   = 0.5*step + scandir*rampdist
@@ -962,7 +962,6 @@ class NewportXPS:
                 pos[axes] = np.zeros(npulses+1, dtype=np.float64)
                 velo[axes] = np.zeros(npulses+1, dtype=np.float64)
                 accel[axes] = np.zeros(npulses+1, dtype=np.float64)
-
 
         traj = {'axes': all_axes,
                 'type': 'array',
