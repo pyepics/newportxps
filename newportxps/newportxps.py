@@ -29,7 +29,6 @@ def withConnectedXPS(fcn):
 
     return wrapper
 
-
 class NewportXPS:
     gather_header = '# XPS Gathering Data\n#--------------'
     def __init__(self, host, group=None,
@@ -797,6 +796,7 @@ class NewportXPS:
 
         trajbase = {'axes': [axis],
                     'type': 'line',
+                    'group': self.traj_group,
                     'pixeltime': pixeltime, 'uploaded': False,
                     'npulses': npulses+1, 'nsegments': 3}
 
@@ -847,7 +847,7 @@ class NewportXPS:
 
     @withConnectedXPS
     def define_array_trajectory(self, positions, dtime=1.0, max_accels=None,
-                                upload=True, name='array', verbose=True):
+                                upload=True, name='array', group=None, verbose=True):
         """define a PVT trajectory for the trajectory group from a dictionary of
         position arrays for each positioner in the trajectory group.
 
@@ -859,6 +859,7 @@ class NewportXPS:
         dtime:      float, time per segment
         max_accels: dict of {PosName: max_acceleration} to use.
         name:       name of trajectory (file will be f"{name}.trj")
+        group:      name of trajectory group
         upload:     bool, whether to upload trajectory
 
         Returns:
@@ -880,6 +881,8 @@ class NewportXPS:
            decelerate to zero velocity.
 
         """
+        if group is not None:
+            self.traj_group = group
         tgroup = self.traj_group
         if tgroup is None:
             raise XPSException("No trajectory group defined")
@@ -965,6 +968,7 @@ class NewportXPS:
 
         traj = {'axes': all_axes,
                 'type': 'array',
+                'group': self.traj_group,
                 'start': start, 'pixeltime': dtime,
                 'npulses': npulses+1, 'nsegments': npulses+1,
                 'uploaded': False}
@@ -993,19 +997,30 @@ class NewportXPS:
         return traj
 
 
-    @withConnectedXPS
-    def move_to_trajectory_start(self, name):
-        """
-        move to the start position of a named trajectory
-        """
-        tgroup = self.traj_group
-        if tgroup is None:
-            raise XPSException("No trajectory group defined")
-
-        traj = self.trajectories.get(name, None)
+    def get_trajectory(self, name, verify_group=True):
+        """get defined trajectory by name, with error checking"""
+        traj = self.trajectory(name, None)
         if traj is None:
             raise XPSException(f"Cannot find trajectory named '{name}'")
 
+        if verify_group:
+            traj_group = traj.get('group', self.traj_group)
+            if traj_group != self.traj_group:
+                raise XPSException(f"trajectory '{name}' uses group '{traj_group}', not '{self.traj_group=}'")
+
+
+    @withConnectedXPS
+    def move_to_trajectory_start(self, name, group=None):
+        """
+        move to the start position of a named trajectory
+        """
+        if group is not None:
+            self.traj_group = group
+
+        if self.traj_group is None:
+            raise XPSException("No trajectory group defined")
+
+        traj = self.get_trajectory(name, verify_group=True)
         if traj['type'] == 'line':
             for pos, axes in zip(traj['start'], traj['axes']):
                 self.move_stage(f'{tgroup}.{axes}', pos)
@@ -1015,22 +1030,21 @@ class NewportXPS:
                 if pos is not None:
                     self.move_stage(f'{tgroup}.{axes}', pos)
 
-
     @withConnectedXPS
-    def arm_trajectory(self, name, verbose=False, move_to_start=True):
+    def arm_trajectory(self, name, verbose=False, move_to_start=True, group=None):
         """
         prepare to run a named (assumed uploaded) trajectory
         """
+        if group is not None:
+            self.traj_group = group
+
         if self.traj_group is None:
             print("Must set group name!")
 
-        traj = self.trajectories.get(name, None)
-        if traj is None:
-            raise XPSException(f"Cannot find trajectory '{name}'")
+        traj = self.get_trajectory(name, verify_group=True)
 
         if not traj['uploaded']:
             raise XPSException(f"trajectory '{name}' has not been uploaded")
-
 
         self.traj_state = ARMING
         self.traj_file = f'{name}.trj'
@@ -1077,7 +1091,7 @@ class NewportXPS:
         self.traj_state = ARMED
 
     @withConnectedXPS
-    def run_trajectory(self, name=None, save=True, clean=False,
+    def run_trajectory(self, name=None, save=True, clean=False, group=None,
                        output_file='Gather.dat', verbose=False, move_to_start=True):
 
         """run a trajectory in PVT mode
@@ -1092,7 +1106,8 @@ class NewportXPS:
                 self._xps.CleanCoreDumpFolder(self._sid)
 
         if name in self.trajectories and self.traj_state != ARMED:
-            self.arm_trajectory(name, verbose=verbose, move_to_start=move_to_start)
+            self.arm_trajectory(name, verbose=verbose, group=group,
+                                move_to_start=move_to_start)
 
         if self.traj_state != ARMED:
             raise XPSException("Must arm trajectory before running!")
@@ -1254,11 +1269,17 @@ class NewportXPS:
                                          start_values=None,
                                          stop_values=None,
                                          accel_values=None,
-                                         pulse_time=0.1, scan_time=10.0):
+                                         pulse_time=0.1, scan_time=10.0, group=None):
         """
         Clemens' code for line trajectories -- should probably be
         unified with define_line_trajectories(),
         """
+        if group is not None:
+            self.traj_group = group
+
+        if self.traj_group is None:
+            raise XPSException("No trajectory group defined")
+
         if start_values is None:
             start_values = np.zeros(len(self.traj_positioners))
         else:
@@ -1287,7 +1308,6 @@ class NewportXPS:
 
         ramp_time = 1.5 * max(abs(velocities / accel_values))
         ramp      = velocities * ramp_time
-        print("ramp : ", ramp_time, ramp)
 
         ramp_attr = {'ramptime': ramp_time}
         down_attr = {'ramptime': ramp_time}
@@ -1325,6 +1345,7 @@ class NewportXPS:
         trajectory_str += down_str + '\n'
 
         self.trajectories[name] = {'pulse_time': pulse_time,
+                                   'group': self.traj_group,
                                    'step_number': len(distances)}
 
         for ind, positioner in enumerate(self.traj_positioners):
@@ -1338,11 +1359,15 @@ class NewportXPS:
         return trajectory_str
 
     def run_line_trajectory_general(self, name='default', verbose=False, save=True,
-                                    outfile='Gather.dat'):
+                                    outfile='Gather.dat', group=None):
         """run trajectory in PVT mode"""
-        traj = self.trajectories.get(name, None)
-        if traj is None:
-            raise XPSException(f'Cannot find trajectory named {name}')
+        if group is not None:
+            self.traj_group = group
+
+        if self.traj_group is None:
+            raise XPSException("No trajectory group defined")
+
+        traj = self.get_trajectory(name, verify_group=True)
 
         traj_file = f'{name}.trj'
         dtime = traj['pulse_time']
@@ -1397,7 +1422,6 @@ class NewportXPS:
 
         self._xps.GroupMoveRelative(self._sid, self.traj_group, ramps)
         return npulses
-
 
 
 if __name__ == '__main__':
