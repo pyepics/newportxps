@@ -760,7 +760,7 @@ class NewportXPS:
 
         if self.traj_group is None:
             raise XPSException("No trajectory group defined")
-
+        # print(f"Define Line traj {axis=}, {self.traj_group=}")
         for axname in (axis, axis.upper(), axis.lower(), axis.title()):
             stage = f"{self.traj_group}.{axname}"
             if stage in self.stages:
@@ -999,7 +999,7 @@ class NewportXPS:
 
     def get_trajectory(self, name, verify_group=True):
         """get defined trajectory by name, with error checking"""
-        traj = self.trajectory(name, None)
+        traj = self.trajectories.get(name, None)
         if traj is None:
             raise XPSException(f"Cannot find trajectory named '{name}'")
 
@@ -1007,7 +1007,7 @@ class NewportXPS:
             traj_group = traj.get('group', self.traj_group)
             if traj_group != self.traj_group:
                 raise XPSException(f"trajectory '{name}' uses group '{traj_group}', not '{self.traj_group=}'")
-
+        return traj
 
     @withConnectedXPS
     def move_to_trajectory_start(self, name, group=None):
@@ -1022,6 +1022,7 @@ class NewportXPS:
 
         traj = self.get_trajectory(name, verify_group=True)
         if traj['type'] == 'line':
+            tgroup = traj['group']
             for pos, axes in zip(traj['start'], traj['axes']):
                 self.move_stage(f'{tgroup}.{axes}', pos)
 
@@ -1042,7 +1043,6 @@ class NewportXPS:
             print("Must set group name!")
 
         traj = self.get_trajectory(name, verify_group=True)
-
         if not traj['uploaded']:
             raise XPSException(f"trajectory '{name}' has not been uploaded")
 
