@@ -88,11 +88,11 @@ class NewportXPS:
 
         for groupname, status in self.get_group_status().items():
             this = self.groups[groupname]
-            out.append(f"{groupname} ({this['category']}), Status: {status}")
+            out.append(f"#\n# {groupname} ({this['category']}), Status: {status}")
             for pos in this['positioners']:
                 stagename = f"{groupname}.{pos}"
                 stage = self.stages[stagename]
-                out.extend([f"# {stagename} ({stage['stagetype']})",
+                out.extend([f"  {stagename} ({stage['stagetype']})",
                             f"      Hardware Status: {hstat[stagename]}",
                             f"      Positioner Errors: {perrs[stagename]}"])
         return "\n".join(out)
