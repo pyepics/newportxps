@@ -883,10 +883,10 @@ class NewportXPS:
         """
         if group is not None:
             self.traj_group = group
+
         tgroup = self.traj_group
         if tgroup is None:
             raise XPSException("No trajectory group defined")
-
         all_axes = [a for a in self.groups[tgroup]['positioners']]
 
         pdat = {}
@@ -1021,8 +1021,8 @@ class NewportXPS:
             raise XPSException("No trajectory group defined")
 
         traj = self.get_trajectory(name, verify_group=True)
+        tgroup = self.traj_group
         if traj['type'] == 'line':
-            tgroup = traj['group']
             for pos, axes in zip(traj['start'], traj['axes']):
                 self.move_stage(f'{tgroup}.{axes}', pos)
 
