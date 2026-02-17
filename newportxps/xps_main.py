@@ -106,7 +106,7 @@ def xps_main():
         if len(filename) < 1:
             print("xps put_system_ini needs system.ini file")
             return
-        text = open(filneme, 'r').read()
+        text = open(filename, 'r').read()
         this_xps.upload_systemini(text)
         print(f"uploaded text from {filename} as system.ini")
 
@@ -115,7 +115,7 @@ def xps_main():
         if len(filename) < 1:
             print("xps put_stages_ini needs stages.ini file")
             return
-        text = open(filneme, 'r').read()
+        text = open(filename, 'r').read()
         this_xps.upload_stagesini(text)
         print(f"uploaded text from {filename} as stages.ini")
 
