@@ -1023,13 +1023,12 @@ class NewportXPS:
         traj = self.get_trajectory(name, verify_group=True)
         tgroup = self.traj_group
         if traj['type'] == 'line':
-            for pos, axes in zip(traj['start'], traj['axes']):
-                self.move_stage(f'{tgroup}.{axes}', pos)
+            kwargs = {ax.lower(): pos for ax, pos in zip(traj['axes'], traj['start'])}
+            self.move_group(tgroup, **kwargs)
 
         elif traj['type'] == 'array':
-            for axes, pos in traj['start'].items():
-                if pos is not None:
-                    self.move_stage(f'{tgroup}.{axes}', pos)
+            kwargs = {k.lower(): v for k, v in traj['start'].items() if v is not None}
+            self.move_group(tgroup, **kwargs)
 
     @withConnectedXPS
     def arm_trajectory(self, name, verbose=False, move_to_start=True, group=None):
