@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from tabulate import tabulate
 
 from .newportxps import NewportXPS
+from .utils import read_xps_file
 
 HELP_MESSAGE = """xps: simple interaction with NewportXPS controllers
     xps -h                            shows this message.
@@ -33,7 +34,7 @@ def xps_main():
     parser.add_argument('options', nargs='*')
     args = parser.parse_args()
 
-    if args.help or len(args.options) == 0:
+    if args.help or len(args.options) < 2:
         print(HELP_MESSAGE)
         return
 
@@ -97,7 +98,7 @@ def xps_main():
     elif command == 'get_stages_ini':
         filename = _argu
         if len(filename) < 1:
-            filename = f'stages_{ipaddr}.ini'
+            filename = f'stages_{ipaddr}x.ini'
         this_xps.save_stagesini(filename)
         print(f"saved stages.ini to {filename}")
 
@@ -106,7 +107,7 @@ def xps_main():
         if len(filename) < 1:
             print("xps put_system_ini needs system.ini file")
             return
-        text = open(filename, 'r').read()
+        text = read_xps_file(filename)
         this_xps.upload_systemini(text)
         print(f"uploaded text from {filename} as system.ini")
 
@@ -115,7 +116,7 @@ def xps_main():
         if len(filename) < 1:
             print("xps put_stages_ini needs stages.ini file")
             return
-        text = open(filename, 'r').read()
+        text = read_xps_file(filename)
         this_xps.upload_stagesini(text)
         print(f"uploaded text from {filename} as stages.ini")
 
