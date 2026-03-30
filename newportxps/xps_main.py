@@ -4,7 +4,7 @@ from pathlib import Path
 from argparse import ArgumentParser
 from tabulate import tabulate
 
-from .newportxps import NewportXPS
+from .newportxps import NewportXPS, XPSException
 from .utils import read_xps_file
 
 HELP_MESSAGE = """xps: simple interaction with NewportXPS controllers
@@ -47,10 +47,10 @@ def xps_main():
     try:
         this_xps = NewportXPS(ipaddr)
     except XPSException:
-        print(f"cannot connect to NewportXPS at {ipaddr=}")
+        print(f"Error: cannot connect to NewportXPS at {ipaddr=}")
         return
     except Exception:
-        print(f"unknown error connecting to NewportXPS at {ipaddr=}")
+        print(f"Error: unknown error connecting to NewportXPS at {ipaddr=}")
         return
 
     if command == 'status':
