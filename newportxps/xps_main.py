@@ -11,19 +11,23 @@ HELP_MESSAGE = """xps: simple interaction with NewportXPS controllers
     xps -h                            shows this message.
     xps [ADDR] status                 print status and configuration for XPS
     xps [ADDR] groups                 print list of groups
+    xps [ADDR] stages                 print table of stages
     xps [ADDR] reboot                 reboot xps
-    xps [ADDR] initialize    [GROUP]  initialize group by name
+    xps [ADDR] initialize   [GROUPS]  initialize group by name
     xps [ADDR] initialize_all         initialize all group
-    xps [ADDR] home          [GROUP]  home group by name
+    xps [ADDR] home         [GROUPS]  home group by name
     xps [ADDR] home_all               home all groups
+    xps [ADDR] move     [STAGE] val   move a stage by name to an absolute value
     xps [ADDR] get_system_ini [FILE]  download system.ini to file
     xps [ADDR] put_system_ini [FILE]  upload   system.ini from file
     xps [ADDR] get_stages_ini [FILE]  download stages.ini to file
     xps [ADDR] put_stages_ini [FILE]  upload   stages.ini from file
 
- ADDR:  name or ip address for the controller
- FILE:  name of file to save or read
- GROUP: name of group to initialize or home
+ ADDR:   name or ip address for the controller
+ FILE:   name of file to save or read
+ GROUP:  name of group to `initialize` or `home`
+ GROUPS: names of mulitiple group to `initialize` or `home` (space separated)
+ STAGE:  name of stage (or single-axis GROUP to `move`
 """
 
 def xps_main():
@@ -40,9 +44,9 @@ def xps_main():
 
     ipaddr = args.options.pop(0)
     command = args.options.pop(0)
-    _argu  = ''
+    arg0  = ''
     if len(args.options) > 0:
-        _argu = args.options.pop(0)
+        arg0 = args.options.pop(0)
 
     try:
         this_xps = NewportXPS(ipaddr)
@@ -61,49 +65,88 @@ def xps_main():
         for gn, gd in this_xps.groups.items():
             dat.append((gn, ', '.join(gd['positioners']), gd['category']))
         print(tabulate(dat, headers))
+    elif command == 'stages':
+        headers =('Stage Name', 'Driver Type', 'Max Velocity',    'Max Acceleration', 'Low Limit', 'High Limit')
+        dat = []
+        for sn, sd in this_xps.stages.items():
+            dat.append((sn, sd['stagetype'], sd['max_velo'],
+                        sd['max_accel'], sd['low_limit'],
+                                       sd['high_limit']))
+        print(tabulate(dat, headers))
+
+    elif command == 'move':
+        stagename = None
+        if arg0 in this_xps.stages:
+            stagename  = arg0
+        elif arg0 in this_xps.groups:
+            group = this_xps.groups[arg0]
+            if len(group['positioners']) == 1:
+                stagename = f"{arg0}.{group['positioners'][0]}"
+        if stagename is None:
+            print("xps move needs name of stage or name of single-axis group")
+            return
+        else:
+            val = args.options.pop(0)
+            fval = float(val)
+            this_xps.move_stage(stagename, fval)
+
     elif command == 'initialize_all':
         this_xps.initialize_allgroups()
     elif command == 'initialize':
-        if len(_argu) < 1:
+        if len(arg0) < 1:
             print("xps initialize needs a group name, or use `xps initialize_all`")
             return
-        groupname = _argu
+        groupname = arg0
         if groupname not in this_xps.groups.keys():
             print(f"xps initialize needs a valid group name, one of {', '.join(this_xps.groups.keys())}")
             return
         this_xps.initialize_group(groupname)
+        if len(args.options) > 0:
+            for gname in args.options:
+                if gname in this_xps.groups.keys():
+                    this_xps.initialize_group(gname)
+                else:
+                    print(f"xps initialize needs a valid group name, one of {', '.join(this_xps.groups.keys())}")
+
     elif command == 'home_all':
         this_xps.homee_allgroups()
     elif command == 'home':
-        if len(_argu) < 1:
+        if len(arg0) < 1:
             print("xps home needs a group name, or use `xps home_all`")
             return
-        groupname = _argu
+        groupname = arg0
         if groupname not in this_xps.groups.keys():
             print(f"xps home needs a valid group name, one of {', '.join(this_xps.groups.keys())}")
             return
         this_xps.home_group(groupname)
+        if len(args.options) > 0:
+            for gname in args.options:
+                if gname in this_xps.groups.keys():
+                    this_xps.home_group(gname)
+                else:
+                    print(f"xps home needs a valid group name, one of {', '.join(this_xps.groups.keys())}")
+
 
     elif command == 'reboot':
         print(f"rebooting {ipaddr}")
         this_xps.reboot()
 
     elif command == 'get_system_ini':
-        filename = _argu
+        filename = arg0
         if len(filename) < 1:
             filename = f'system_{ipaddr}.ini'
         this_xps.save_systemini(filename)
         print(f"saved system.ini to {filename}")
 
     elif command == 'get_stages_ini':
-        filename = _argu
+        filename = arg0
         if len(filename) < 1:
             filename = f'stages_{ipaddr}x.ini'
         this_xps.save_stagesini(filename)
         print(f"saved stages.ini to {filename}")
 
     elif command == 'put_system_ini':
-        filename = _argu
+        filename = arg0
         if len(filename) < 1:
             print("xps put_system_ini needs system.ini file")
             return
@@ -112,7 +155,7 @@ def xps_main():
         print(f"uploaded text from {filename} as system.ini")
 
     elif command == 'put_stages_ini':
-        filename = _argu
+        filename = arg0
         if len(filename) < 1:
             print("xps put_stages_ini needs stages.ini file")
             return
