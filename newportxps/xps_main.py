@@ -141,7 +141,7 @@ def xps_main():
     elif command == 'get_stages_ini':
         filename = arg0
         if len(filename) < 1:
-            filename = f'stages_{ipaddr}x.ini'
+            filename = f'stages_{ipaddr}.ini'
         this_xps.save_stagesini(filename)
         print(f"saved stages.ini to {filename}")
 
