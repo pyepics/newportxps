@@ -917,12 +917,11 @@ class NewportXPS:
             raise XPSException("No trajectory group defined")
         all_axes = [a for a in self.groups[tgroup]['positioners']]
 
-        pdat = {}
+        pos_data = {}
         input_ok = True
         npts = None
         for key, value in positions.items():
             pname = key[:]
-
             if key.startswith(tgroup):
                 pname = key[len(tgroup)+1:]
             if pname not in all_axes:
@@ -935,9 +934,9 @@ class NewportXPS:
                 input_ok = False
 
             if isinstance(value, np.ndarray):
-                positions[key] = value.astype(np.float64).tolist()
+                pos_data[pname] = value.astype(np.float64).tolist()
             else:
-                positions[key] = [float(x) for x in value]
+                pos_data[pname] = [float(x) for x in value]
 
         if not input_ok:
             return
@@ -958,8 +957,8 @@ class NewportXPS:
             maxa = self.stages[stage]['max_accel']
             if axes in max_accels:
                 maxa = min(max_accels[axes], maxa)
-            if axes in positions:
-                upos = positions[axes]
+            if axes in pos_data:
+                upos = pos_data[axes]
                 # mid are the trajectory trigger points, the
                 # mid points between the desired positions
                 mid = [3*upos[0]-2*upos[1], 2*upos[0] - upos[1]]
@@ -990,6 +989,7 @@ class NewportXPS:
                     raise ValueError(errmsg)
             else:
                 start[axes] = None
+                print(f"WARNING: unknown axes for trajectory scan {axes=}")
                 pos[axes] = np.zeros(npulses+1, dtype=np.float64)
                 velo[axes] = np.zeros(npulses+1, dtype=np.float64)
                 accel[axes] = np.zeros(npulses+1, dtype=np.float64)
