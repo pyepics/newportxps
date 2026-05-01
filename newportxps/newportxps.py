@@ -8,6 +8,7 @@ import socket
 from copy import deepcopy
 from configparser import  ConfigParser
 import numpy as np
+from tabulate import tabulate
 
 from .debugtime import debugtime
 from .utils import clean_text
@@ -69,9 +70,33 @@ class NewportXPS:
         return f"NewportXPS(host='{self.host}', port={self.port})"
 
     @withConnectedXPS
+    def group_report(self):
+        "return printable status of all groups"
+        headers =('Group Name', 'Positioners', 'Type', 'Status')
+        dat = []
+        status = self.get_group_status()
+        for gn, gd in self.groups.items():
+            dat.append((gn, ', '.join(gd['positioners']), gd['category'], status[gn]))
+        return tabulate(dat, headers)
+
+    @withConnectedXPS
+    def stage_report(self):
+        "return printable status of all stages"
+        headers =('Stage Name', 'Driver Type', 'Max Speed',  'Max Accel', 'Lo Limit', 'Hi Limit', 'HardwareStatus', 'Errors')
+        dat = []
+        hstat = self.get_hardware_status()
+        perrs = self.get_positioner_errors()
+        for sn, sd in self.stages.items():
+            dat.append((sn, sd['stagetype'], sd['max_velo'],
+                        sd['max_accel'], sd['low_limit'],
+                                       sd['high_limit'], hstat[sn], perrs[sn]))
+        return tabulate(dat, headers)
+
+    @withConnectedXPS
     def status_report(self):
         """return printable status report"""
         err, uptime = self._xps.ElapsedTimeGet(self._sid)
+        print("Uptime ", err, uptime)
         self.check_error(err, msg="Elapsed Time")
         boottime = time.time() - uptime
         hostn = socket.getfqdn(self.host)
@@ -81,19 +106,10 @@ class NewportXPS:
                f"# Last Reboot:      {time.ctime(boottime)}",
                f"# Trajectory Group: {self.traj_group}",
                ]
-
-        out.append("# Groups and Stages")
-        hstat = self.get_hardware_status()
-        perrs = self.get_positioner_errors()
-        for groupname, status in self.get_group_status().items():
-            this = self.groups[groupname]
-            out.append(f"#\n# {groupname} ({this['category']}), Status: {status}")
-            for pos in this['positioners']:
-                stagename = f"{groupname}.{pos}"
-                stage = self.stages[stagename]
-                out.extend([f"  {stagename} ({stage['stagetype']})",
-                            f"      Hardware Status: {hstat[stagename]}",
-                            f"      Positioner Errors: {perrs[stagename]}"])
+        out.append(' ')
+        out.append(self.group_report())
+        out.append(' ')
+        out.append(self.stage_report())
         return "\n".join(out)
 
     def disconnect(self):

@@ -2,7 +2,6 @@
 
 from pathlib import Path
 from argparse import ArgumentParser
-from tabulate import tabulate
 
 from .newportxps import NewportXPS, XPSException
 from .utils import read_xps_file
@@ -60,19 +59,10 @@ def xps_main():
     if command == 'status':
         print(this_xps.status_report())
     elif command == 'groups':
-        headers =('Group Name', 'Positioners', 'Type')
-        dat = []
-        for gn, gd in this_xps.groups.items():
-            dat.append((gn, ', '.join(gd['positioners']), gd['category']))
-        print(tabulate(dat, headers))
+        print(this_xps.group_report())
+
     elif command == 'stages':
-        headers =('Stage Name', 'Driver Type', 'Max Velocity',    'Max Acceleration', 'Low Limit', 'High Limit')
-        dat = []
-        for sn, sd in this_xps.stages.items():
-            dat.append((sn, sd['stagetype'], sd['max_velo'],
-                        sd['max_accel'], sd['low_limit'],
-                                       sd['high_limit']))
-        print(tabulate(dat, headers))
+        print(this_xps.stage_report())
 
     elif command == 'move':
         stagename = None
