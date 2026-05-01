@@ -85,7 +85,6 @@ class NewportXPS:
         out.append("# Groups and Stages")
         hstat = self.get_hardware_status()
         perrs = self.get_positioner_errors()
-
         for groupname, status in self.get_group_status().items():
             this = self.groups[groupname]
             out.append(f"#\n# {groupname} ({this['category']}), Status: {status}")
@@ -489,22 +488,26 @@ class NewportXPS:
         """
         initialize all groups, no homing
         """
+        status = self.get_group_status()
         for g in self.groups:
-            try:
+            stat = status[g].lower()
+            if stat.startswith('not initialized'):
                 self.initialize_group(group=g)
-            except XPSException:
-                print(f"Warning: could not initialize '{g}' (already initialized?)")
 
 
     def home_allgroups(self, with_encoder=True, home=False):
         """
         home all groups
         """
+        self.initialize_allgroups()
+        status = self.get_group_status()
         for g in self.groups:
-            self.home_group(group=g)
+            stat = status[g].lower()
+            if stat.startswith('not referenced'):
+                self.home_group(group=g)
 
 
-    def initialize_group(self, group=None, with_encoder=True, home=False,
+    def initialize_group(self, group, with_encoder=True, home=False,
                          with_raise=True):
         """
         initialize groups, optionally homing each.
@@ -513,26 +516,35 @@ class NewportXPS:
             with_encoder (bool): whethter to initialize with encoder [True]
             home (bool): whether to home all groups [False]
         """
-        method = 'GroupInitialize'
-        if with_encoder:
-            method  = 'GroupInitializeWithEncoderCalibration'
-        self._group_act(method, group=group, action='initializing',
-                        with_raise=with_raise)
+        stat = self.get_group_status()[group].lower()
+        if not stat.startswith('not initialized'):
+            print(f"group '{g}' already initialized.")
+        else:
+            method = 'GroupInitialize'
+            if with_encoder:
+                method  = 'GroupInitializeWithEncoderCalibration'
+            self._group_act(method, group=group, action='initializing',
+                            with_raise=with_raise)
         if home:
             self.home_group(group=group, with_raise=with_raise)
 
-    def home_group(self, group=None, with_raise=True):
+    def home_group(self, group, with_raise=True):
         """
         home group
 
         Parameters:
-            group (None or string): name of group to home [None]
+            group (string): name of group to home
 
         Notes:
-            if group is `None`, all groups will be homed.
+            to home all groups, use `home_allgroups`
         """
-        self._group_act('GroupHomeSearch', group=group, action='homing',
-                        with_raise=with_raise)
+        stat = self.get_group_status()[group].lower()
+        if stat.startswith('not initialized'):
+            self.initialize_group(group)
+            stat = self.get_group_status()[group].lower()
+        if stat.startswith('not referenced'):
+            self._group_act('GroupHomeSearch', group=group, action='homing',
+                            with_raise=with_raise)
 
     def enable_group(self, group=None):
         """enable group
