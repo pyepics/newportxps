@@ -818,10 +818,10 @@ class NewportXPS:
         velocity = min(distance/scantime, max_velo)
         if verbose:
             print(f"trajecory: {scantime=:.5f}, {pixeltime=:.5f}, {npulses=}, {start=:.5f}, {stop=:.5f}, {step=:.5f}")
+
         ramptime = max(5.e-4, abs(velocity/accel))
         rampdist = max(5.e-6, 0.5*velocity*ramptime)
         offset   = 0.5*step + scandir*rampdist
-
         trajbase = {'axes': [axis],
                     'type': 'line',
                     'group': self.traj_group,
@@ -943,7 +943,7 @@ class NewportXPS:
 
         npulses  = npts+1
         dtime = float(abs(dtime))
-        times = np.ones(npulses+1)*dtime
+        times = np.ones(npulses)*dtime
 
         if max_accels is None:
             max_accels = {}
@@ -951,6 +951,7 @@ class NewportXPS:
         velo = {}
         accel = {}
         start = {}
+        ramp = {}
         for axes in all_axes:
             stage = f'{tgroup}.{axes}'
             maxv = self.stages[stage]['max_velo']
@@ -961,38 +962,43 @@ class NewportXPS:
                 upos = pos_data[axes]
                 # mid are the trajectory trigger points, the
                 # mid points between the desired positions
-                mid = [3*upos[0]-2*upos[1], 2*upos[0] - upos[1]]
+                mid = [2*upos[0] - upos[1]]
                 mid.extend(upos)
                 mid.extend([2*upos[-1]-upos[-2],
-                            3*upos[-1]-2*upos[-2],
-                            ])
+                            3*upos[-1]-2*upos[-2]])
                 mid = np.array(mid)
                 pos[axes] = 0.5*(mid[1:] + mid[:-1])
 
                 # adjust first segment velocity to half max accel
                 p0, p1, p2 = pos[axes][0], pos[axes][1], pos[axes][2]
+                sign = 1 if (p1-p0) > 0.00 else -1
                 v0 = (p1-p0)/dtime
                 v1 = (p2-p1)/dtime
                 a0 = (v1-v0)/dtime
-                start[axes] = p1 - (p1-p0)*dtime*max(v0, 0.5*maxv)/max(a0, 0.5*maxa)
+                ramptime = max(5.e-4, abs(v0/maxa))
+                rampdist = max(5.e-6, 0.75*v0*ramptime)
+                offset = 0.5*(p1-p0)+sign*rampdist
+                start[axes] = float(p0 - offset)
+                velo[axes] = np.gradient(pos[axes])/dtime
+                velo[axes][-1] = 0
 
                 pos[axes] = np.diff(pos[axes] - start[axes])
-                velo[axes] = np.gradient(pos[axes])/times
-                velo[axes][-1] = 0.0
-                accel[axes] = np.gradient(velo[axes])/times
+                # accel[axes] = np.gradient(velo[axes])/dtime
+                ramp[axes] = (1.5*ramptime, offset, velo[axes][0])
 
                 if (max(abs(velo[axes])) > maxv):
                     errmsg = f"max velocity {maxv} violated for {axes}"
                     raise ValueError(errmsg)
-                if (max(abs(accel[axes])) > maxa):
-                    errmsg = f"max acceleration {maxa} violated for {axes}"
-                    raise ValueError(errmsg)
+                #if (max(abs(accel[axes])) > maxa):
+                #    errmsg = f"max acceleration {maxa} violated for {axes}"
+                #    raise ValueError(errmsg)
             else:
                 start[axes] = None
-                print(f"WARNING: unknown axes for trajectory scan {axes=}")
+                # print(f"WARNING: unknown axes for trajectory scan {axes=}")
                 pos[axes] = np.zeros(npulses+1, dtype=np.float64)
                 velo[axes] = np.zeros(npulses+1, dtype=np.float64)
-                accel[axes] = np.zeros(npulses+1, dtype=np.float64)
+                # accel[axes] = np.zeros(npulses+1, dtype=np.float64)
+                ramp[axes] = (0, 0, 0)
 
         traj = {'axes': all_axes,
                 'type': 'array',
@@ -1001,14 +1007,31 @@ class NewportXPS:
                 'npulses': npulses+1, 'nsegments': npulses+1,
                 'uploaded': False}
 
-        buff = ['']
+        # ramp:
+        ramptime = 0
+        ramp_up = []
+        ramp_dn = []
+        for axes in all_axes:
+            rtime, rdist, rvelo = ramp[axes]
+            ramptime = max(ramptime, rtime)
+            ramp_up.extend([f"{rdist:.8f}", f"{rvelo:.8f}"])
+            ramp_dn.extend([f"{rdist:.8f}", f"{0.0:.8f}"])
+        ramp_up.insert(0, f"{ramptime:.8f}")
+        ramp_dn.insert(0, f"{ramptime:.8f}")
+        ramp_up = ', '.join(ramp_up)
+        ramp_dn = ', '.join(ramp_dn)
 
-        for n in range(npulses+1):
+        buff = ['', ramp_up]
+
+
+        for n in range(npulses):
             line = [f"{dtime:.8f}"]
             for axes in all_axes:
                 p, v = pos[axes][n], velo[axes][n]
                 line.extend([f"{p:.8f}", f"{v:.8f}"])
             buff.append(', '.join(line))
+
+        buff.append(ramp_dn)
         buff.append('')
         buff  = '\n'.join(buff)
         traj['pvt_buffer'] = buff
