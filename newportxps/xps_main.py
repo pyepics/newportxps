@@ -109,7 +109,7 @@ def xps_main():
                     print(f"xps initialize needs a valid group name, one of {', '.join(this_xps.groups.keys())}")
 
     elif command == 'home_all':
-        this_xps.homee_allgroups()
+        this_xps.home_allgroups()
     elif command == 'home':
         if len(arg0) < 1:
             print("xps home needs a group name, or use `xps home_all`")
