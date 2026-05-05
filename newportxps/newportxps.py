@@ -1,6 +1,6 @@
  #!/usr/bin/env python
 
-import posixpath
+from pathlib import Path
 import atexit
 import sys
 import time
@@ -17,6 +17,24 @@ from .ftp_wrapper import SFTPWrapper, FTPWrapper
 
 IDLE, ARMING, ARMED, RUNNING, COMPLETE, WRITING, READING = \
       'IDLE', 'ARMING', 'ARMED', 'RUNNING', 'COMPLETE', 'WRITING', 'READING'
+
+# locations for ftp-files
+XPS_LOCATIONS = {'XPS-C':  {'config': '/Admin/Config',
+                            'script': '/Public/Scripts',
+                            'trajectories': '/Public/Trajectories',
+                            'gathering': '/Public',
+                            },
+                 'XPS-Q':  {'config': 'Config',
+                            'script': 'Public/Scripts',
+                            'trajectories': 'Public/Trajectories',
+                            'gathering': 'Public',
+                            },
+                 'XPS-D':  {'config': 'Config',
+                            'script': 'Public/Scripts',
+                            'trajectories': 'Public/Trajectories',
+                            'gathering': 'Public/Gathering',
+                            },
+                 }
 
 def withConnectedXPS(fcn):
     """decorator to ensure a NewportXPS is connected before a method is called"""
@@ -96,7 +114,6 @@ class NewportXPS:
     def status_report(self):
         """return printable status report"""
         err, uptime = self._xps.ElapsedTimeGet(self._sid)
-        print("Uptime ", err, uptime)
         self.check_error(err, msg="Elapsed Time")
         boottime = time.time() - uptime
         hostn = socket.getfqdn(self.host)
@@ -130,16 +147,23 @@ class NewportXPS:
 
         err, val = self._xps.FirmwareVersionGet(self._sid)
         self.firmware_version = val
-        self.ftphome = ''
+        self.xps_gen = 'XPS-Q'
         if any([m in self.firmware_version for m in ['XPS-D', 'HXP-D', 'XPS-RL']]):
             err, val = self._xps.Send(self._sid, 'InstallerVersionGet(char *)')
             self.firmware_version = val
             self.ftpconn = SFTPWrapper(**self.ftpargs)
+            self.xps_gen = 'XPS-D'
         else:
             self.ftpconn = FTPWrapper(**self.ftpargs)
             if 'XPS-C' in self.firmware_version:
-                self.ftphome = '/Admin'
+                self.xps_gen = 'XPS-C'
         self.read_systemini()
+
+    def ftpdir(self, name='config'):
+        """get ftp folder by name: config, scripts, trajectories, gathering"""
+        folder = XPS_LOCATIONS[self.xps_gen].get(name, 'Public')
+        location = Path(folder).as_posix()
+        return location
 
     def clean_folders(self):
         if 'xps-d' in self.firmware_version.lower():
@@ -162,7 +186,7 @@ class NewportXPS:
         fname  (string): name of file to save to ['system.ini']
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(self.ftpdir('config'))
         self.ftpconn.save('system.ini', fname)
         self.ftpconn.close()
 
@@ -173,7 +197,7 @@ class NewportXPS:
            fname  (string): name of file to save to ['stages.ini']
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(self.ftpdir('config'))
         self.ftpconn.save('stages.ini', fname)
         self.ftpconn.close()
 
@@ -182,11 +206,10 @@ class NewportXPS:
         this is part of the connection process
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(self.ftpdir('config'))
         lines = self.ftpconn.getlines('system.ini')
         self.ftpconn.close()
         initext = '\n'.join([line.strip() for line in lines])
-
         pvtgroups = []
         self.stages= {}
         self.groups = {}
@@ -241,7 +264,7 @@ class NewportXPS:
            text  (str):   full text of trajectory file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Trajectories'))
+        self.ftpconn.cwd(self.ftpdir('trajectories'))
         self.ftpconn.save(filename, filename)
         self.ftpconn.close()
 
@@ -254,7 +277,7 @@ class NewportXPS:
            text  (str):   full text of trajectory file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Trajectories'))
+        self.ftpconn.cwd(self.ftpdir('trajectories'))
         self.ftpconn.put(clean_text(text), filename)
         self.ftpconn.close()
 
@@ -263,7 +286,7 @@ class NewportXPS:
         """
         remotefiles = ""
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.cwd(self.ftpdir('scripts'))
         remotefiles = self.ftpconn.list()
         self.ftpconn.close()
 
@@ -278,7 +301,7 @@ class NewportXPS:
         """
         filecontent = ""
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.cwd(self.ftpdir('scripts'))
         filecontent = self.ftpconn.getlines(filename)
         self.ftpconn.close()
 
@@ -292,7 +315,7 @@ class NewportXPS:
            filename (str):  name of script file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.cwd(self.ftpdir('scripts'))
         self.ftpconn.save(filename, filename)
         self.ftpconn.close()
 
@@ -305,7 +328,7 @@ class NewportXPS:
            text  (str):   full text of script file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.cwd(self.ftpdir('scripts'))
         self.ftpconn.put(clean_text(text), filename)
         self.ftpconn.close()
 
@@ -317,7 +340,7 @@ class NewportXPS:
            filename (str):  name of script file
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Public', 'Scripts'))
+        self.ftpconn.cwd(self.ftpdir('scripts'))
         self.ftpconn.delete(filename)
         self.ftpconn.close()
 
@@ -329,7 +352,7 @@ class NewportXPS:
            text  (str):   full text of system.ini
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(self.ftpdir('config'))
         self.ftpconn.put(clean_text(text), 'system.ini')
         self.ftpconn.close()
 
@@ -349,7 +372,7 @@ class NewportXPS:
 
         """
         self.ftpconn.connect(**self.ftpargs)
-        self.ftpconn.cwd(posixpath.join(self.ftphome, 'Config'))
+        self.ftpconn.cwd(self.ftpdir('config'))
         self.ftpconn.put(clean_text(text), 'stages.ini')
         self.ftpconn.close()
 
@@ -1214,15 +1237,36 @@ class NewportXPS:
         return npulses
 
     @withConnectedXPS
-    def read_and_save(self, output_file, verbose=False):
+    def read_and_save(self, output_file, use_StopAndSave=True,
+                      timeout=10, verbose=False):
         "read and save gathering file"
         self.ngathered = 0
-        npulses, buff = self.read_gathering(set_idle_when_done=False,
-                                            verbose=verbose)
+        if use_StopAndSAve:
+            t0 = time.time()
+            ret = self._xps.GatheringStopAndSave(self._sid)
+            time.sleep(0.025)
+            self.ftpconn.connect(**self.ftpargs)
+            self.ftpconn.cwd(self.ftpdir('gathering'))
+            buff = self.ftpconn.getlines('Gathering.dat')
+            while len(buff) < 3 and time.time() < (t0+timeout):
+                time.sleep(0.025)
+                try:
+                    buff = self.ftpconn.getlines('Gathering.dat')
+                except:
+                    buff = ''
+            self.ftpconn.close()
+            buff = buff[2:]
+            npulses = len(buff)
+            buff = '\n'.join(buff)
+            dtime = time.time() - t0
+            if verbose:
+                print(f"read Gathering with StopAndSave {len(buff)} bytes, {npulses=} {dtime=:.2f}")
+        else:
+            npulses, buff = self.read_gathering(set_idle_when_done=False,
+                                                verbose=verbose)
         if npulses < 1:
             return
-        self.save_gathering_file(output_file, buff,
-                                 verbose=verbose,
+        self.save_gathering_file(output_file, buff, verbose=verbose,
                                  set_idle_when_done=False)
         self.ngathered = npulses
 
