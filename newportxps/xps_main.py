@@ -152,7 +152,8 @@ def xps_main():
         text = read_xps_file(filename)
         this_xps.upload_stagesini(text)
         print(f"uploaded text from {filename} as stages.ini")
-
+    else:
+        print(f"unknown command for xps '{command}'.  Try 'xps -h'")
 
 
 if __name__ == '__main__':
