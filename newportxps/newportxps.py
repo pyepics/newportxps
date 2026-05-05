@@ -1241,7 +1241,7 @@ class NewportXPS:
                       timeout=10, verbose=False):
         "read and save gathering file"
         self.ngathered = 0
-        if use_StopAndSAve:
+        if use_StopAndSave:
             t0 = time.time()
             ret = self._xps.GatheringStopAndSave(self._sid)
             time.sleep(0.025)
