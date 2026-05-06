@@ -998,23 +998,18 @@ class NewportXPS:
                 v0 = (p1-p0)/dtime
                 v1 = (p2-p1)/dtime
                 a0 = (v1-v0)/dtime
-                ramptime = max(5.e-4, abs(v0/maxa))
-                rampdist = max(5.e-6, 0.75*v0*ramptime)
-                offset = 0.5*(p1-p0)+sign*rampdist
-                start[axes] = float(p0 - offset)
+                ramptime = max(5.e-4, 1.50*abs(v0)/maxa)
+                rampdist = sign*max(5.e-6, 0.75*abs(v0)*ramptime)
                 velo[axes] = np.gradient(pos[axes])/dtime
                 velo[axes][-1] = 0
-
+                offset = 0.5*(p1-p0) + rampdist
+                start[axes] = float(p0 - offset)
                 pos[axes] = np.diff(pos[axes] - start[axes])
-                # accel[axes] = np.gradient(velo[axes])/dtime
-                ramp[axes] = (1.5*ramptime, offset, velo[axes][0])
-
+                ramp[axes] = (ramptime, rampdist, velo[axes][0])
                 if (max(abs(velo[axes])) > maxv):
                     errmsg = f"max velocity {maxv} violated for {axes}"
                     raise ValueError(errmsg)
-                #if (max(abs(accel[axes])) > maxa):
-                #    errmsg = f"max acceleration {maxa} violated for {axes}"
-                #    raise ValueError(errmsg)
+
             else:
                 start[axes] = None
                 # print(f"WARNING: unknown axes for trajectory scan {axes=}")
@@ -1039,14 +1034,13 @@ class NewportXPS:
             ramptime = max(ramptime, rtime)
             ramp_up.extend([f"{rdist:.8f}", f"{rvelo:.8f}"])
             ramp_dn.extend([f"{rdist:.8f}", f"{0.0:.8f}"])
+        ramptime = 1.1*ramptime
         ramp_up.insert(0, f"{ramptime:.8f}")
         ramp_dn.insert(0, f"{ramptime:.8f}")
         ramp_up = ', '.join(ramp_up)
         ramp_dn = ', '.join(ramp_dn)
 
         buff = ['', ramp_up]
-
-
         for n in range(npulses):
             line = [f"{dtime:.8f}"]
             for axes in all_axes:
