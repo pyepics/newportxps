@@ -1237,16 +1237,23 @@ class NewportXPS:
         return npulses
 
     @withConnectedXPS
-    def read_and_save(self, output_file, use_StopAndSave=True,
-                      timeout=10, verbose=False):
-        "read and save gathering file"
+    def read_and_save(self, output_file, use_ftp=False,
+                      reuse_ftpconn=False,  ftp_timeout=10, verbose=False):
+        """read and save gathering file
+            output_file str]:      name of output file
+            use_ftp [bool]:        save locally and fetch with (s)ftp [False]
+            reuse_ftpconn [bool]:  do not close ftpconn (for repeated use) [False]
+            ftp_timeout  [float]:  max time (in seconds) to wait for gathering file [10]
+            verbose  [bool]:       print debugging/timing data [False]
+        """
         self.ngathered = 0
-        if use_StopAndSave:
+        if use_ftp:
             t0 = time.time()
             ret = self._xps.GatheringStopAndSave(self._sid)
             time.sleep(0.025)
-            self.ftpconn.connect(**self.ftpargs)
-            self.ftpconn.cwd(self.ftpdir('gathering'))
+            if self.ftpconn._conn is None:
+                self.ftpconn.connect(**self.ftpargs)
+                self.ftpconn.cwd(self.ftpdir('gathering'))
             buff = self.ftpconn.getlines('Gathering.dat')
             while len(buff) < 3 and time.time() < (t0+timeout):
                 time.sleep(0.025)
@@ -1254,7 +1261,8 @@ class NewportXPS:
                     buff = self.ftpconn.getlines('Gathering.dat')
                 except:
                     buff = ''
-            self.ftpconn.close()
+            if not reuse_ftpconn:
+                self.ftpconn.close()
             buff = buff[2:]
             npulses = len(buff)
             buff = '\n'.join(buff)
@@ -1300,9 +1308,9 @@ class NewportXPS:
                 return (0, ' \n')
         dt.add("gather num %d npulses=%d (%d)" % (ret, npulses, self.nsegments))
         counter = 0
-        while npulses < 1 and counter < 5:
+        while npulses < 1 and counter < 10:
             counter += 1
-            time.sleep(0.25)
+            time.sleep(0.05)
             ret, npulses, nx = self._xps.GatheringCurrentNumberGet(self._sid)
             print( 'Had to do repeat XPS Gathering: ', ret, npulses, nx)
         dt.add("gather before multilinesget, npulses=%d" % (npulses))
