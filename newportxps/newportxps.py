@@ -994,7 +994,7 @@ class NewportXPS:
 
                 # adjust first segment velocity to half max accel
                 p0, p1, p2 = pos[axes][0], pos[axes][1], pos[axes][2]
-                sign = 1 if (p1-p0) > 0.00 else -1
+                sign = 1 if (p1-p0) >= 0.00 else -1
                 v0 = (p1-p0)/dtime
                 v1 = (p2-p1)/dtime
                 a0 = (v1-v0)/dtime
@@ -1006,6 +1006,7 @@ class NewportXPS:
                 start[axes] = float(p0 - offset)
                 pos[axes] = np.diff(pos[axes] - start[axes])
                 ramp[axes] = (ramptime, rampdist, velo[axes][0])
+                # print("RAMP ", axes, sign, rampdist, ramptime, offset, ramp)
                 if (max(abs(velo[axes])) > maxv):
                     errmsg = f"max velocity {maxv} violated for {axes}"
                     raise ValueError(errmsg)
