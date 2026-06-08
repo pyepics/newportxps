@@ -1160,7 +1160,8 @@ class NewportXPS:
 
     @withConnectedXPS
     def run_trajectory(self, name=None, save=True, clean=False, group=None,
-                       output_file='Gather.dat', verbose=False, move_to_start=True):
+                       output_file='Gather.dat', verbose=False, move_to_start=True,
+                       move_timeout=30):
 
         """run a trajectory in PVT mode
 
@@ -1182,6 +1183,22 @@ class NewportXPS:
 
         dt.add('armed')
         tgroup = self.traj_group
+
+        # wait for GroupStatus to report that the group is ready for motion
+        err, stat = self._xps.GroupStatusGet(self._sid, tgroup)
+        group_ready = (err == 0 and (stat > 9 and stat < 20))
+        timeout = time.time() + move_timeout
+        while not group_ready:
+            err, stat = self._xps.GroupStatusGet(self._sid, tgroup)
+            group_ready = (err == 0 and (stat > 9 and stat < 20))
+            if verbose:
+                es1, status = self._xps.GroupStatusStringGet(self._sid, stat)
+                print(f"Wait for Group {tgroup} to be ready: {status=}")
+            if not group_ready:
+                if time.time() >  timeout:
+                    raise ValueError(f"Group {tgroup} not ready after {move_timeout} seconds")
+                time.sleep(0.1)
+
         buffer = ('Always', f'{tgroup}.PVT.TrajectoryPulse',)
         err, ret = self._xps.EventExtendedConfigurationTriggerSet(self._sid, buffer,
                                                                   ('0','0'), ('0','0'),
@@ -1206,7 +1223,7 @@ class NewportXPS:
         err, ret = self._xps.MultipleAxesPVTExecution(self._sid,
                                                       self.traj_group,
                                                       self.traj_file, 1)
-        self.check_error(err, msg="PVT Execute", with_raise=False)
+        self.check_error(err, msg="MultipleAxesPVTExecution", with_raise=False)
         if verbose:
             print( " PVT Execute done ", ret)
         dt.add('pvt execute')
@@ -1225,7 +1242,6 @@ class NewportXPS:
                                          set_idle_when_done=False)
                 dt.add('saved gathering')
             self.ngathered = npulses
-            # self.read_and_save(output_file, verbose=verbose)
         self.traj_state = IDLE
         if verbose:
             dt.show()
