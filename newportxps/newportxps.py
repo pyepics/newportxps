@@ -557,7 +557,7 @@ class NewportXPS:
         """
         stat = self.get_group_status()[group].lower()
         if not stat.startswith('not initialized'):
-            print(f"group '{g}' already initialized.")
+            print(f"group '{group}' already initialized.")
         else:
             method = 'GroupInitialize'
             if with_encoder:
@@ -1135,6 +1135,10 @@ class NewportXPS:
         if verbose:
             print(" GatheringReset returned ", ret)
 
+        try:
+            ret = self._xps.GatheringReset(self._sid)
+        except Exception:
+            pass
         err, ret = self._xps.GatheringConfigurationSet(self._sid, outputs)
         self.check_error(err, msg="GatheringConfigSet")
 
